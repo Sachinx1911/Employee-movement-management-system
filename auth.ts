@@ -1,0 +1,57 @@
+import NextAuth, { CredentialsSignin } from "next-auth";
+import Credentials from "next-auth/providers/credentials";
+import bcrypt from "bcryptjs";
+import { z } from "zod";
+import { authConfig } from "./auth.config";
+import { db } from "@/lib/db";
+
+const credentialsSchema = z.object({
+  username: z.string().trim().toLowerCase().min(1).max(50),
+  password: z.string().min(1).max(200),
+});
+
+// Brute-force protection: too many failures for a username locks it briefly.
+// Stored in the audit log so it works across server instances.
+const MAX_FAILURES = 5;
+const LOCK_WINDOW_MS = 15 * 60 * 1000;
+
+// Constant-time-ish path for unknown users so response time doesn't reveal them.
+const DUMMY_HASH = "$2b$10$ys84s5FNJOqTGlGV34wGpeml2joEfv7YcSRfRftmrNmwldmr5ZVi6";
+
+class LockedError extends CredentialsSignin {
+  code = "locked";
+}
+
+export const { handlers, auth, signIn, signOut } = NextAuth({
+  ...authConfig,
+  providers: [
+    Credentials({
+      credentials: { username: {}, password: {} },
+      async authorize(raw) {
+        const parsed = credentialsSchema.safeParse(raw);
+        if (!parsed.success) return null;
+        const { username, password } = parsed.data;
+
+        const since = new Date(Date.now() - LOCK_WINDOW_MS);
+        const failures = await db.auditLog.count({
+          where: { entityType: "Login", entityId: username, action: "LOGIN_FAILED", createdAt: { gte: since } },
+        });
+        if (failures >= MAX_FAILURES) throw new LockedError();
+
+        const user = await db.user.findUnique({ where: { username } });
+        const ok = await bcrypt.compare(password, user?.passwordHash ?? DUMMY_HASH);
+        if (!user || !user.active || !ok) {
+          await db.auditLog.create({
+            data: { entityType: "Login", entityId: username, action: "LOGIN_FAILED", summary: `Failed login for "${username}"` },
+          });
+          return null;
+        }
+
+        await db.auditLog.create({
+          data: { entityType: "User", entityId: user.id, action: "LOGIN", userId: user.id, summary: `${user.name} logged in` },
+        });
+        return { id: user.id, name: user.name, role: user.role, username: user.username };
+      },
+    }),
+  ],
+});

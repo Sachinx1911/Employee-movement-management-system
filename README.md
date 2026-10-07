@@ -1,36 +1,102 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# DDSR GROUP — Employee IN / OUT & Movement Register
 
-## Getting Started
+Next.js 16 · React 19 · TypeScript · Tailwind v4 · shadcn/ui · Prisma 7 + PostgreSQL · Auth.js v5
 
-First, run the development server:
+Records when staff go out and come back, calculates durations, and produces the
+WhatsApp-ready daily report and the monthly statistics automatically.
+
+---
+
+## Local development
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+npm run db:start      # terminal 1 — local PostgreSQL on port 5433 (keep running)
+npm run db:migrate    # apply migrations
+npm run db:seed       # demo data: employees, locations, sample day 06/10/2026
+npm run dev           # terminal 2 — http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Demo logins (development only): `admin / admin@123`, `staff / staff@123`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+---
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Production deployment
 
-## Learn More
+### 1. Database
+Create a PostgreSQL 15+ database (Neon, Supabase, AWS RDS, DigitalOcean, or your own
+server). Use an SSL connection string, e.g.
+`postgresql://USER:PASSWORD@HOST:5432/ddsr_movement?sslmode=require`.
 
-To learn more about Next.js, take a look at the following resources:
+### 2. Environment variables
+Copy `.env.example` and fill in:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+| Variable | Required | Notes |
+|---|---|---|
+| `DATABASE_URL` | ✅ | PostgreSQL connection string |
+| `AUTH_SECRET` | ✅ | 32+ random characters — `npx auth secret` |
+| `NEXT_PUBLIC_APP_TIMEZONE` | ✅ | `Asia/Kolkata` |
+| `AUTH_TRUST_HOST` | own server | `true` when running behind Nginx/Docker (not needed on Vercel) |
+| `SEED_ADMIN_PASSWORD` | first setup | Initial password for user `admin` (8+ chars) |
+| `SEED_DEMO` | — | `false` in production |
+| `SMTP_HOST` | — | Enables email toggles in Settings |
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+The server refuses to start in production if `DATABASE_URL` or a strong `AUTH_SECRET` is missing.
 
-## Deploy on Vercel
+### 3. Create tables and the first admin (once)
+Run from any machine that can reach the database, with the production env vars set:
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```bash
+npm ci
+npm run db:deploy     # prisma migrate deploy — creates/updates tables
+npm run db:seed       # creates user "admin" with SEED_ADMIN_PASSWORD + default purposes
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Sign in as `admin`, then **Settings → System & Security → Change Password**, add users in
+**Settings → Users & Access**, and add employees/locations in **Master Data**.
+
+### 4a. Deploy on Vercel
+Import the repository, add the environment variables, deploy. The build command is
+`npm run build`. Run step 3 against the production database before first use and after
+every release that adds a migration.
+
+### 4b. Deploy on your own server (Node)
+```bash
+npm ci
+npm run build
+npm run db:deploy
+NODE_ENV=production PORT=3000 node .next/standalone/server.js
+```
+Copy `.next/static` → `.next/standalone/.next/static` and `public` → `.next/standalone/public`
+before starting, and put Nginx/Caddy in front for HTTPS. Use a process manager (pm2/systemd).
+
+### 4c. Docker
+```bash
+docker build -t ddsr-movement .
+docker build --target migrate -t ddsr-movement-migrate .
+docker run --rm --env-file .env.production ddsr-movement-migrate   # migrations
+docker run -d -p 3000:3000 --env-file .env.production --restart unless-stopped ddsr-movement
+```
+
+### Health check & backups
+- `GET /api/health` → `{"status":"ok"}` when the app and database respond (for uptime monitors).
+- **Settings → Data & Backup → Download Backup** exports all records as JSON.
+- Also enable automated backups / point-in-time recovery on the database provider.
+
+---
+
+## Security
+- Passwords hashed with bcrypt; sessions are signed JWT cookies (12 h), secure on HTTPS.
+- Login locks a username for 15 minutes after 5 failed attempts.
+- Roles: **ADMIN** (everything) and **STAFF** (OUT entry, Mark IN, today's pending entries, daily report).
+  Every page and server action checks the role on the server.
+- All input is validated on the server with Zod; Prisma parameterises every query.
+- Security headers: CSP, HSTS, X-Frame-Options DENY, nosniff, Referrer-Policy, Permissions-Policy.
+- Every create / edit / Mark IN / delete / login is written to the Audit Log (Settings → System & Security).
+- Movements are never hard-deleted (voided); employees/locations with history can only be deactivated.
+
+## Key business rules
+- Duration is never typed in; it is `IN − OUT`, stored as whole minutes.
+- One active OUT per employee is enforced by a unique column (`Movement.activeEmployeeId`).
+- IN cannot be before OUT; future times are rejected; overlapping entries for one employee are rejected.
+- Business dates use `NEXT_PUBLIC_APP_TIMEZONE` regardless of the server's timezone.

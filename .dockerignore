@@ -1,0 +1,12 @@
+node_modules
+.next
+.git
+.local-db
+.env
+.env.*
+!.env.example
+lib/generated
+*.log
+.claude
+.agents
+.windsurf
