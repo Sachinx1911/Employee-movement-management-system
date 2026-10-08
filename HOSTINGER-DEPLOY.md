@@ -50,7 +50,7 @@ node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
 | Node.js version | **22.x** |
 | Root directory | `/` (रिकामे) |
 | Install command | `npm install` (default) |
-| Build command | **`npm run build:prod`** |
+| Build command | **`npm run build`** |
 | Start command | **`npm start`** |
 | Output directory | `.next` (default) |
 
@@ -66,7 +66,7 @@ node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
 
 5. Domain निवडा (उदा. `movement.तुमचेdomain.com`) आणि **Deploy** करा.
 
-`npm run build:prod` आपोआप हे करते:
+`npm run build` आपोआप हे करते:
 1. database मध्ये सर्व tables बनवते (`prisma migrate deploy`)
 2. पहिल्यांदाच `admin` user बनवते (`SEED_ADMIN_PASSWORD` ने) आणि default purposes टाकते
 3. app build करते

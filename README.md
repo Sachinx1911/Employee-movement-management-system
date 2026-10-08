@@ -28,13 +28,13 @@ Step-by-step guide (Marathi + English): **[HOSTINGER-DEPLOY.md](HOSTINGER-DEPLOY
 Summary:
 1. hPanel → **Databases → MySQL Databases**: create a database + user.
 2. hPanel → **Websites → Add website → Node.js Apps** → import this GitHub repository.
-3. Build settings: Node **22.x**, build command `npm run build:prod`, start command `npm start`.
+3. Build settings: Node **22.x**, build command `npm run build`, start command `npm start`.
 4. Environment variables: `DATABASE_URL`, `AUTH_SECRET`, `NEXT_PUBLIC_APP_TIMEZONE`, `AUTH_TRUST_HOST=true`,
    `SEED_ADMIN_PASSWORD` (first deploy).
-5. Deploy. `build:prod` applies migrations (`prisma migrate deploy`), creates the first admin, then builds.
+5. Deploy. `npm run build` applies migrations (`prisma migrate deploy`), creates the first admin, then builds.
 
 ### Other hosts
-- Any Node 20.19+ server: `npm ci && npm run build:prod && npm start` with the same env vars.
+- Any Node 20.19+ server: `npm ci && npm run build && npm start` with the same env vars.
 - Docker: `docker build -t ddsr-movement .` (standalone image; run migrations with
   `docker build --target migrate -t ddsr-movement-migrate .`).
 

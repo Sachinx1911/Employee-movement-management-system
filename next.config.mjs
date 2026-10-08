@@ -1,4 +1,5 @@
-import type { NextConfig } from "next";
+// Plain JavaScript (not .ts) so hosts that wrap the config file (e.g. Hostinger)
+// can load it without a TypeScript step.
 
 const isProd = process.env.NODE_ENV === "production";
 
@@ -26,7 +27,8 @@ const securityHeaders = [
   ...(isProd ? [{ key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains" }] : []),
 ];
 
-const nextConfig: NextConfig = {
+/** @type {import("next").NextConfig} */
+const nextConfig = {
   // Every page here is behind login and shows live data, so request-time
   // rendering is the right default; Cache Components stays off.
   cacheComponents: false,
