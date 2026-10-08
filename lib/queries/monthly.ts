@@ -13,6 +13,8 @@ export type EmployeeMonthRow = {
   totalMinutes: number;
   avgMinutes: number;
   longestMinutes: number;
+  /** Users who entered this employee's entries, most first: [{ name, count }] */
+  enteredBy: { name: string; count: number }[];
 };
 export type DayMonthRow = { date: string; employeesOut: number; outings: number; completed: number; pending: number; totalMinutes: number };
 export type DeptMonthRow = { department: string; employees: number; outings: number; totalMinutes: number; avgMinutes: number };
@@ -62,12 +64,13 @@ export async function getMonthlyReport(year: number, month: number): Promise<Mon
       status: true,
       durationMinutes: true,
       employeeId: true,
+      createdBy: { select: { name: true } },
       employee: { select: { name: true, code: true, department: { select: { name: true } } } },
       location: { select: { name: true } },
     },
   });
 
-  const emp = new Map<string, EmployeeMonthRow & { days: Set<string> }>();
+  const emp = new Map<string, EmployeeMonthRow & { days: Set<string>; entered: Map<string, number> }>();
   const day = new Map<string, DayMonthRow & { people: Set<string> }>();
   const dept = new Map<string, { people: Set<string>; outings: number; completed: number; totalMinutes: number }>();
   const loc = new Map<string, { people: Set<string>; visits: number; completed: number; totalMinutes: number }>();
@@ -97,10 +100,13 @@ export async function getMonthlyReport(year: number, month: number): Promise<Mon
         avgMinutes: 0,
         longestMinutes: 0,
         days: new Set(),
+        enteredBy: [],
+        entered: new Map<string, number>(),
       };
       emp.set(r.employeeId, e);
     }
     e.outings++;
+    e.entered.set(r.createdBy.name, (e.entered.get(r.createdBy.name) ?? 0) + 1);
     e.days.add(key);
     if (done) {
       e.completed++;
@@ -138,7 +144,12 @@ export async function getMonthlyReport(year: number, month: number): Promise<Mon
   }
 
   const employees = [...emp.values()]
-    .map(({ days, ...e }) => ({ ...e, workingDays: days.size, avgMinutes: avg(e.totalMinutes, e.completed) }))
+    .map(({ days, entered, ...e }) => ({
+      ...e,
+      workingDays: days.size,
+      avgMinutes: avg(e.totalMinutes, e.completed),
+      enteredBy: [...entered.entries()].map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count),
+    }))
     .sort((a, b) => (a.code ?? "~").localeCompare(b.code ?? "~") || a.name.localeCompare(b.name));
 
   // Who did what this month: entries added (by entry date) and Mark IN /

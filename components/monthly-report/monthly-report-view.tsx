@@ -187,7 +187,7 @@ export function MonthlyReportView({ report, years, maxMonthForYear }: { report: 
             {empty ? (
               <p className="py-12 text-center text-sm text-muted-foreground">No movement data available for this month.</p>
             ) : (
-              <table className="w-full min-w-[720px] text-sm">
+              <table className="w-full min-w-[860px] text-sm">
                 {tab === "employee" && (
                   <>
                     <thead>
@@ -200,11 +200,12 @@ export function MonthlyReportView({ report, years, maxMonthForYear }: { report: 
                         <Th className="text-right">Total Outside Time</Th>
                         <Th className="text-right">Average / Outing</Th>
                         <Th className="text-right">Longest Outing</Th>
+                        <Th>Entered By</Th>
                       </tr>
                     </thead>
                     <tbody>
                       {report.employees
-                        .filter((e) => match(e.name, e.department, e.code))
+                        .filter((e) => match(e.name, e.department, e.code, ...e.enteredBy.map((u) => u.name)))
                         .map((e, i) => (
                           <tr key={e.employeeId} className="border-b">
                             <Td className="tabular">{i + 1}</Td>
@@ -215,6 +216,15 @@ export function MonthlyReportView({ report, years, maxMonthForYear }: { report: 
                             <Td className="tabular text-right font-medium">{formatDuration(e.totalMinutes)}</Td>
                             <Td className="tabular text-right">{formatDuration(e.avgMinutes)}</Td>
                             <Td className="tabular text-right">{formatDuration(e.longestMinutes)}</Td>
+                            <Td>
+                              <div className="flex flex-wrap gap-1">
+                                {e.enteredBy.map((u) => (
+                                  <span key={u.name} className="rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700">
+                                    {u.name} <span className="tabular text-muted-foreground">({u.count})</span>
+                                  </span>
+                                ))}
+                              </div>
+                            </Td>
                           </tr>
                         ))}
                     </tbody>
@@ -375,6 +385,7 @@ export function MonthlyReportView({ report, years, maxMonthForYear }: { report: 
               <th>Outside Time</th>
               <th>Average</th>
               <th>Longest</th>
+              <th>Entered By</th>
             </tr>
           </thead>
           <tbody>
@@ -387,6 +398,7 @@ export function MonthlyReportView({ report, years, maxMonthForYear }: { report: 
                 <td>{formatDuration(e.totalMinutes)}</td>
                 <td>{formatDuration(e.avgMinutes)}</td>
                 <td>{formatDuration(e.longestMinutes)}</td>
+                <td>{e.enteredBy.map((u) => `${u.name} (${u.count})`).join(", ")}</td>
               </tr>
             ))}
           </tbody>

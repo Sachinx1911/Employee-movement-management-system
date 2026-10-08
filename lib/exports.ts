@@ -190,6 +190,9 @@ export function dailyPdf(report: DailyReport, company = "DDSR GROUP"): Buffer {
 // ───────────────────────── Monthly ─────────────────────────
 
 
+/** "Admin (5), Office Staff (2)" */
+export const enteredByText = (list: { name: string; count: number }[]) => list.map((u) => `${u.name} (${u.count})`).join(", ");
+
 export type MonthlyTab = "employee" | "day" | "department" | "location" | "user";
 
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
@@ -231,8 +234,18 @@ export function monthlyTable(r: MonthlyReport, tab: MonthlyTab): { title: string
     };
   return {
     title: "Employee Wise",
-    head: ["Sr. No.", "Employee", "Department", "Working Days", "Total Outings", "Total Outside Time", "Average / Outing", "Longest Outing"],
-    rows: r.employees.map((e, i) => [i + 1, e.name, e.department ?? "", e.workingDays, e.outings, formatDuration(e.totalMinutes), formatDuration(e.avgMinutes), formatDuration(e.longestMinutes)]),
+    head: ["Sr. No.", "Employee", "Department", "Working Days", "Total Outings", "Total Outside Time", "Average / Outing", "Longest Outing", "Entered By"],
+    rows: r.employees.map((e, i) => [
+      i + 1,
+      e.name,
+      e.department ?? "",
+      e.workingDays,
+      e.outings,
+      formatDuration(e.totalMinutes),
+      formatDuration(e.avgMinutes),
+      formatDuration(e.longestMinutes),
+      enteredByText(e.enteredBy),
+    ]),
   };
 }
 
