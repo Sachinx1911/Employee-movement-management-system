@@ -3,7 +3,7 @@ import { getAppSettings } from "@/lib/queries/settings";
 import { monthlyCsv, monthlyPdf, monthlyXlsx, type MonthlyTab } from "@/lib/exports";
 import { getMonthlyReport, parseMonth } from "@/lib/queries/monthly";
 
-const TABS: MonthlyTab[] = ["employee", "day", "department", "location"];
+const TABS: MonthlyTab[] = ["employee", "day", "department", "location", "user"];
 
 export async function GET(request: Request) {
   const session = await auth();

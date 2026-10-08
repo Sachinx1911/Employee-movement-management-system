@@ -1,6 +1,6 @@
 import "server-only";
 import { db } from "@/lib/db";
-import { dateKeyToDb, dbDateToKey, monthRange, todayKey } from "@/lib/date-utils";
+import { addDaysToKey, dateKeyToDb, dbDateToKey, monthRange, todayKey, zonedDateTime } from "@/lib/date-utils";
 
 export type EmployeeMonthRow = {
   employeeId: string;
@@ -18,6 +18,17 @@ export type DayMonthRow = { date: string; employeesOut: number; outings: number;
 export type DeptMonthRow = { department: string; employees: number; outings: number; totalMinutes: number; avgMinutes: number };
 export type LocationMonthRow = { location: string; visits: number; employees: number; totalMinutes: number; avgMinutes: number };
 
+export type UserMonthRow = {
+  userId: string;
+  name: string;
+  role: "ADMIN" | "STAFF";
+  added: number;
+  markedIn: number;
+  edited: number;
+  deleted: number;
+  lastActivity: string | null; // ISO
+};
+
 export type MonthlyReport = {
   year: number;
   month: number;
@@ -26,6 +37,7 @@ export type MonthlyReport = {
   days: DayMonthRow[];
   departments: DeptMonthRow[];
   locations: LocationMonthRow[];
+  users: UserMonthRow[];
 };
 
 export function parseMonth(sp: Record<string, string | string[] | undefined>) {
@@ -129,9 +141,56 @@ export async function getMonthlyReport(year: number, month: number): Promise<Mon
     .map(({ days, ...e }) => ({ ...e, workingDays: days.size, avgMinutes: avg(e.totalMinutes, e.completed) }))
     .sort((a, b) => (a.code ?? "~").localeCompare(b.code ?? "~") || a.name.localeCompare(b.name));
 
+  // Who did what this month: entries added (by entry date) and Mark IN /
+  // edits / deletes (by when they happened, from the audit log).
+  const monthStart = zonedDateTime(from, "00:00");
+  const monthEnd = zonedDateTime(addDaysToKey(to, 1), "00:00");
+  const [createdBy, actions, users] = await Promise.all([
+    db.movement.groupBy({
+      by: ["createdById"],
+      where: { date: { gte: dateKeyToDb(from), lte: dateKeyToDb(to) } },
+      _count: true,
+      _max: { createdAt: true },
+    }),
+    db.auditLog.groupBy({
+      by: ["userId", "action"],
+      where: { entityType: "Movement", action: { in: ["MARK_IN", "UPDATE", "VOID"] }, createdAt: { gte: monthStart, lt: monthEnd } },
+      _count: true,
+      _max: { createdAt: true },
+    }),
+    db.user.findMany({ select: { id: true, name: true, role: true } }),
+  ]);
+  const userRows = new Map<string, UserMonthRow>();
+  const row = (id: string) => {
+    let r = userRows.get(id);
+    if (!r) {
+      const u = users.find((x) => x.id === id);
+      r = { userId: id, name: u?.name ?? "Deleted user", role: u?.role ?? "STAFF", added: 0, markedIn: 0, edited: 0, deleted: 0, lastActivity: null };
+      userRows.set(id, r);
+    }
+    return r;
+  };
+  const touch = (r: UserMonthRow, at: Date | null | undefined) => {
+    if (at && (!r.lastActivity || at.toISOString() > r.lastActivity)) r.lastActivity = at.toISOString();
+  };
+  for (const c of createdBy) {
+    const r = row(c.createdById);
+    r.added = c._count;
+    touch(r, c._max.createdAt);
+  }
+  for (const a of actions) {
+    if (!a.userId) continue;
+    const r = row(a.userId);
+    if (a.action === "MARK_IN") r.markedIn += a._count;
+    else if (a.action === "UPDATE") r.edited += a._count;
+    else if (a.action === "VOID") r.deleted += a._count;
+    touch(r, a._max.createdAt);
+  }
+
   return {
     year,
     month,
+    users: [...userRows.values()].sort((a, b) => b.added + b.markedIn - (a.added + a.markedIn) || a.name.localeCompare(b.name)),
     summary: {
       outings: rows.length,
       employeesOut: emp.size,

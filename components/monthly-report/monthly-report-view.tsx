@@ -20,19 +20,20 @@ import { StatCard } from "@/components/shared/stat-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { formatDateKey } from "@/lib/date-utils";
+import { formatDateKey, formatDateTime } from "@/lib/date-utils";
 import { formatDuration } from "@/lib/duration-utils";
 import type { MonthlyReport } from "@/lib/queries/monthly";
 import { cn } from "@/lib/utils";
 import { OutingsPerDayChart } from "./monthly-chart";
 
-type Tab = "employee" | "day" | "department" | "location";
+type Tab = "employee" | "day" | "department" | "location" | "user";
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 const TABS: { id: Tab; label: string }[] = [
   { id: "employee", label: "Employee Wise" },
   { id: "day", label: "Day Wise" },
   { id: "department", label: "Department Wise" },
   { id: "location", label: "Location Wise" },
+  { id: "user", label: "Entered By" },
 ];
 
 function Th({ children, className }: { children?: React.ReactNode; className?: string }) {
@@ -174,7 +175,7 @@ export function MonthlyReportView({ report, years, maxMonthForYear }: { report: 
                 </button>
               ))}
             </div>
-            {(tab === "employee" || tab === "location" || tab === "department") && (
+            {(tab === "employee" || tab === "location" || tab === "department" || tab === "user") && (
               <div className="relative mb-2 md:w-64">
                 <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
                 <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search…" className="h-9 pl-9" aria-label="Search table" />
@@ -275,6 +276,49 @@ export function MonthlyReportView({ report, years, maxMonthForYear }: { report: 
                     </tbody>
                   </>
                 )}
+                {tab === "user" && (
+                  <>
+                    <thead>
+                      <tr className="bg-muted/70">
+                        <Th className="w-12">#</Th>
+                        <Th>User</Th>
+                        <Th>Role</Th>
+                        <Th className="text-right">Entries Added</Th>
+                        <Th className="text-right">Mark IN</Th>
+                        <Th className="text-right">Edits</Th>
+                        <Th className="text-right">Deleted</Th>
+                        <Th>Last Activity</Th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {report.users.length === 0 && (
+                        <tr>
+                          <td colSpan={8} className="py-10 text-center text-muted-foreground">
+                            No entries were made this month.
+                          </td>
+                        </tr>
+                      )}
+                      {report.users
+                        .filter((u) => match(u.name))
+                        .map((u, i) => (
+                          <tr key={u.userId} className="border-b">
+                            <Td className="tabular">{i + 1}</Td>
+                            <Td className="font-medium">{u.name}</Td>
+                            <Td>
+                              <span className={cn("rounded-md px-2 py-0.5 text-xs font-medium", u.role === "ADMIN" ? "bg-blue-50 text-blue-700" : "bg-slate-100 text-slate-700")}>
+                                {u.role === "ADMIN" ? "Admin" : "Staff"}
+                              </span>
+                            </Td>
+                            <Td className="tabular text-right font-medium">{u.added}</Td>
+                            <Td className="tabular text-right">{u.markedIn}</Td>
+                            <Td className="tabular text-right">{u.edited}</Td>
+                            <Td className={cn("tabular text-right", u.deleted > 0 && "font-semibold text-red-600")}>{u.deleted}</Td>
+                            <Td className="tabular">{u.lastActivity ? formatDateTime(new Date(u.lastActivity)) : "-"}</Td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </>
+                )}
                 {tab === "location" && (
                   <>
                     <thead>
@@ -367,6 +411,31 @@ export function MonthlyReportView({ report, years, maxMonthForYear }: { report: 
                 <td>{d.completed}</td>
                 <td>{d.pending}</td>
                 <td>{formatDuration(d.totalMinutes)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <h3 className="mb-1 mt-6 font-semibold">Entered By</h3>
+        <table className="w-full border-collapse text-xs [&_td]:border [&_td]:px-2 [&_td]:py-1 [&_th]:border [&_th]:px-2 [&_th]:py-1 [&_th]:text-left">
+          <thead>
+            <tr>
+              <th>User</th>
+              <th>Role</th>
+              <th>Entries Added</th>
+              <th>Mark IN</th>
+              <th>Edits</th>
+              <th>Deleted</th>
+            </tr>
+          </thead>
+          <tbody>
+            {report.users.map((u) => (
+              <tr key={u.userId}>
+                <td>{u.name}</td>
+                <td>{u.role === "ADMIN" ? "Admin" : "Staff"}</td>
+                <td>{u.added}</td>
+                <td>{u.markedIn}</td>
+                <td>{u.edited}</td>
+                <td>{u.deleted}</td>
               </tr>
             ))}
           </tbody>

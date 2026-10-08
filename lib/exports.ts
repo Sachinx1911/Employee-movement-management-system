@@ -2,7 +2,7 @@ import "server-only";
 import ExcelJS from "exceljs";
 import { jsPDF } from "jspdf";
 import { autoTable } from "jspdf-autotable";
-import { formatDateKey, formatTimeReport } from "@/lib/date-utils";
+import { formatDateKey, formatDateTime, formatTimeReport } from "@/lib/date-utils";
 import { formatDuration, formatDurationReport } from "@/lib/duration-utils";
 import type { MonthlyReport } from "@/lib/queries/monthly";
 import type { DailyReport } from "@/lib/queries/reports";
@@ -190,12 +190,27 @@ export function dailyPdf(report: DailyReport, company = "DDSR GROUP"): Buffer {
 // ───────────────────────── Monthly ─────────────────────────
 
 
-export type MonthlyTab = "employee" | "day" | "department" | "location";
+export type MonthlyTab = "employee" | "day" | "department" | "location" | "user";
 
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 export const monthLabel = (r: MonthlyReport) => `${MONTHS[r.month - 1]} ${r.year}`;
 
 export function monthlyTable(r: MonthlyReport, tab: MonthlyTab): { title: string; head: string[]; rows: (string | number)[][] } {
+  if (tab === "user")
+    return {
+      title: "Entered By",
+      head: ["Sr.", "User", "Role", "Entries Added", "Mark IN", "Edits", "Deleted", "Last Activity"],
+      rows: r.users.map((u, i) => [
+        i + 1,
+        u.name,
+        u.role === "ADMIN" ? "Admin" : "Staff",
+        u.added,
+        u.markedIn,
+        u.edited,
+        u.deleted,
+        u.lastActivity ? formatDateTime(new Date(u.lastActivity)) : "-",
+      ]),
+    };
   if (tab === "day")
     return {
       title: "Day Wise",
@@ -221,7 +236,7 @@ export function monthlyTable(r: MonthlyReport, tab: MonthlyTab): { title: string
   };
 }
 
-const ALL_TABS: MonthlyTab[] = ["employee", "day", "department", "location"];
+const ALL_TABS: MonthlyTab[] = ["employee", "day", "department", "location", "user"];
 
 export function monthlyCsv(r: MonthlyReport, tab: MonthlyTab): string {
   const t = monthlyTable(r, tab);
