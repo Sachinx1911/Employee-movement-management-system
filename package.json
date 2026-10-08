@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "prisma generate && prisma migrate deploy && prisma db seed && next build",
+    "build": "prisma generate && prisma migrate deploy && prisma db seed && next build --webpack",
     "start": "next start",
     "lint": "eslint",
     "db:start": "node scripts/local-db.mjs",
@@ -21,6 +21,7 @@
     "@hookform/resolvers": "^5.9.1",
     "@prisma/adapter-mariadb": "^7.10.0",
     "@prisma/client": "^7.10.0",
+    "@tailwindcss/postcss": "^4.3.3",
     "@tailwindcss/turbopack": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
