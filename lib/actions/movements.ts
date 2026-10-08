@@ -322,7 +322,7 @@ export async function quickCreateLocation(name: string): Promise<{ ok: true; id:
     const user = await getActionUser();
     const n = nameSchema.safeParse(name);
     if (!n.success) return { ok: false, error: "Enter a location name." };
-    const found = await db.location.findFirst({ where: { name: { equals: n.data, mode: "insensitive" } } });
+    const found = await db.location.findFirst({ where: { name: { equals: n.data } } });
     if (found) {
       if (!found.active) await db.location.update({ where: { id: found.id }, data: { active: true } });
       return { ok: true, id: found.id, name: found.name };
@@ -344,7 +344,7 @@ export async function quickCreatePurpose(name: string): Promise<{ ok: true; id: 
     const user = await getActionUser();
     const n = nameSchema.safeParse(name);
     if (!n.success) return { ok: false, error: "Enter a purpose name." };
-    const found = await db.purpose.findFirst({ where: { name: { equals: n.data, mode: "insensitive" } } });
+    const found = await db.purpose.findFirst({ where: { name: { equals: n.data } } });
     if (found) {
       if (!found.active) await db.purpose.update({ where: { id: found.id }, data: { active: true } });
       return { ok: true, id: found.id, name: found.name };

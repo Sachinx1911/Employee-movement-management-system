@@ -18,7 +18,7 @@ COPY --from=deps /app/lib/generated ./lib/generated
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
 # Build-time placeholders; real values are provided at runtime.
-RUN DATABASE_URL="postgresql://build:build@localhost:5432/build" AUTH_SECRET="build-time-placeholder-secret-not-used-at-runtime" npx next build
+RUN BUILD_STANDALONE=1 DATABASE_URL="mysql://build:build@localhost:3306/build" AUTH_SECRET="build-time-placeholder-secret-not-used-at-runtime" npx next build
 
 # Migration runner: has the Prisma CLI and migrations.
 FROM deps AS migrate

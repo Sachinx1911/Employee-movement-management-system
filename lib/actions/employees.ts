@@ -159,7 +159,7 @@ export async function createDepartment(name: string): Promise<ActionResult<{ id:
     const user = await getActionUser({ admin: true });
     const parsed = departmentNameSchema.safeParse(name);
     if (!parsed.success) return { ok: false, error: parsed.error.issues[0]!.message };
-    const existing = await db.department.findFirst({ where: { name: { equals: parsed.data, mode: "insensitive" } } });
+    const existing = await db.department.findFirst({ where: { name: { equals: parsed.data } } });
     if (existing) {
       if (!existing.active) await db.department.update({ where: { id: existing.id }, data: { active: true } });
       return { ok: true, message: `${existing.name} selected.`, data: { id: existing.id, name: existing.name } };

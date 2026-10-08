@@ -64,7 +64,7 @@ export function MonthlyMovementChart({ data }: { data: MonthPoint[] }) {
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={data} barGap={4} barCategoryGap="22%" margin={{ top: 18, right: 4, left: -18, bottom: 0 }}>
             <CartesianGrid vertical={false} stroke="#e2e8f0" />
-            <XAxis dataKey="month" interval={0} tick={AXIS} tickLine={false} axisLine={{ stroke: "#e2e8f0" }} />
+            <XAxis dataKey="month" interval="preserveStartEnd" minTickGap={8} tick={AXIS} tickLine={false} axisLine={{ stroke: "#e2e8f0" }} />
             <YAxis tick={AXIS} tickLine={false} axisLine={false} allowDecimals={false} />
             <Tooltip
               cursor={{ fill: "rgba(148,163,184,0.12)" }}
@@ -107,7 +107,7 @@ export function DailyEntriesChart({ data }: { data: DayPoint[] }) {
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={data} barCategoryGap="28%" margin={{ top: 18, right: 4, left: -18, bottom: 0 }}>
             <CartesianGrid vertical={false} stroke="#e2e8f0" />
-            <XAxis dataKey="day" interval={0} tick={AXIS} tickLine={false} axisLine={{ stroke: "#e2e8f0" }} />
+            <XAxis dataKey="day" interval="preserveStartEnd" minTickGap={6} tick={AXIS} tickLine={false} axisLine={{ stroke: "#e2e8f0" }} />
             <YAxis tick={AXIS} tickLine={false} axisLine={false} allowDecimals={false} />
             <Tooltip
               cursor={{ fill: "rgba(148,163,184,0.12)" }}

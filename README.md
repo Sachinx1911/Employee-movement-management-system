@@ -1,6 +1,6 @@
 # DDSR GROUP — Employee IN / OUT & Movement Register
 
-Next.js 16 · React 19 · TypeScript · Tailwind v4 · shadcn/ui · Prisma 7 + PostgreSQL · Auth.js v5
+Next.js 16 · React 19 · TypeScript · Tailwind v4 · shadcn/ui · Prisma 7 + MySQL/MariaDB · Auth.js v5
 
 Records when staff go out and come back, calculates durations, and produces the
 WhatsApp-ready daily report and the monthly statistics automatically.
@@ -11,77 +11,37 @@ WhatsApp-ready daily report and the monthly statistics automatically.
 
 ```bash
 npm install
-npm run db:start      # terminal 1 — local PostgreSQL on port 5433 (keep running)
-npm run db:migrate    # apply migrations
-npm run db:seed       # demo data: employees, locations, sample day 06/10/2026
+npm run db:start      # terminal 1 — local MySQL on port 3307; applies migrations + demo data (keep running)
 npm run dev           # terminal 2 — http://localhost:3000
 ```
 
-Demo logins (development only): `admin / admin@123`, `staff / staff@123`.
+`.env` for local: `DATABASE_URL="mysql://root@127.0.0.1:3307/ddsr_movement"`. The local database is
+temporary — it is recreated with demo data each time `db:start` runs.
+Demo logins (local only): `admin / admin@123`, `staff / staff@123`.
 
 ---
 
-## Production deployment
+## Production deployment — Hostinger Business Web Hosting
 
-### 1. Database
-Create a PostgreSQL 15+ database (Neon, Supabase, AWS RDS, DigitalOcean, or your own
-server). Use an SSL connection string, e.g.
-`postgresql://USER:PASSWORD@HOST:5432/ddsr_movement?sslmode=require`.
+Step-by-step guide (Marathi + English): **[HOSTINGER-DEPLOY.md](HOSTINGER-DEPLOY.md)**
 
-### 2. Environment variables
-Copy `.env.example` and fill in:
+Summary:
+1. hPanel → **Databases → MySQL Databases**: create a database + user.
+2. hPanel → **Websites → Add website → Node.js Apps** → import this GitHub repository.
+3. Build settings: Node **22.x**, build command `npm run build:prod`, start command `npm start`.
+4. Environment variables: `DATABASE_URL`, `AUTH_SECRET`, `NEXT_PUBLIC_APP_TIMEZONE`, `AUTH_TRUST_HOST=true`,
+   `SEED_ADMIN_PASSWORD` (first deploy).
+5. Deploy. `build:prod` applies migrations (`prisma migrate deploy`), creates the first admin, then builds.
 
-| Variable | Required | Notes |
-|---|---|---|
-| `DATABASE_URL` | ✅ | PostgreSQL connection string |
-| `AUTH_SECRET` | ✅ | 32+ random characters — `npx auth secret` |
-| `NEXT_PUBLIC_APP_TIMEZONE` | ✅ | `Asia/Kolkata` |
-| `AUTH_TRUST_HOST` | own server | `true` when running behind Nginx/Docker (not needed on Vercel) |
-| `SEED_ADMIN_PASSWORD` | first setup | Initial password for user `admin` (8+ chars) |
-| `SEED_DEMO` | — | `false` in production |
-| `SMTP_HOST` | — | Enables email toggles in Settings |
-
-The server refuses to start in production if `DATABASE_URL` or a strong `AUTH_SECRET` is missing.
-
-### 3. Create tables and the first admin (once)
-Run from any machine that can reach the database, with the production env vars set:
-
-```bash
-npm ci
-npm run db:deploy     # prisma migrate deploy — creates/updates tables
-npm run db:seed       # creates user "admin" with SEED_ADMIN_PASSWORD + default purposes
-```
-
-Sign in as `admin`, then **Settings → System & Security → Change Password**, add users in
-**Settings → Users & Access**, and add employees/locations in **Master Data**.
-
-### 4a. Deploy on Vercel
-Import the repository, add the environment variables, deploy. The build command is
-`npm run build`. Run step 3 against the production database before first use and after
-every release that adds a migration.
-
-### 4b. Deploy on your own server (Node)
-```bash
-npm ci
-npm run build
-npm run db:deploy
-NODE_ENV=production PORT=3000 node .next/standalone/server.js
-```
-Copy `.next/static` → `.next/standalone/.next/static` and `public` → `.next/standalone/public`
-before starting, and put Nginx/Caddy in front for HTTPS. Use a process manager (pm2/systemd).
-
-### 4c. Docker
-```bash
-docker build -t ddsr-movement .
-docker build --target migrate -t ddsr-movement-migrate .
-docker run --rm --env-file .env.production ddsr-movement-migrate   # migrations
-docker run -d -p 3000:3000 --env-file .env.production --restart unless-stopped ddsr-movement
-```
+### Other hosts
+- Any Node 20.19+ server: `npm ci && npm run build:prod && npm start` with the same env vars.
+- Docker: `docker build -t ddsr-movement .` (standalone image; run migrations with
+  `docker build --target migrate -t ddsr-movement-migrate .`).
 
 ### Health check & backups
-- `GET /api/health` → `{"status":"ok"}` when the app and database respond (for uptime monitors).
+- `GET /api/health` → `{"status":"ok"}` when the app and database respond.
 - **Settings → Data & Backup → Download Backup** exports all records as JSON.
-- Also enable automated backups / point-in-time recovery on the database provider.
+- Also enable Hostinger's daily backups for the database.
 
 ---
 

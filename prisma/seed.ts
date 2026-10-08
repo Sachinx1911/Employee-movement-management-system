@@ -1,14 +1,15 @@
 // Seed data for DDSR GROUP movement system.
 // Run: npx prisma db seed — idempotent; never deletes data.
-// Production: SEED_ADMIN_PASSWORD required; demo data only with SEED_DEMO=true.
+// Production: SEED_ADMIN_PASSWORD required on first run. Demo data only with SEED_DEMO=true (local script).
 import "dotenv/config";
 import bcrypt from "bcryptjs";
 import { TZDate } from "@date-fns/tz";
-import { PrismaPg } from "@prisma/adapter-pg";
+import { PrismaMariaDb } from "@prisma/adapter-mariadb";
 import { PrismaClient } from "../lib/generated/prisma/client";
+import { mysqlPoolConfig } from "../lib/db-config";
 
 const TZ = process.env.NEXT_PUBLIC_APP_TIMEZONE || "Asia/Kolkata";
-const db = new PrismaClient({ adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL! }) });
+const db = new PrismaClient({ adapter: new PrismaMariaDb(mysqlPoolConfig()) });
 
 const DEPARTMENTS = ["Sales", "Accounts", "Site", "Operations", "Office", "HR", "Management", "Field"];
 
@@ -102,19 +103,18 @@ function at(dateKey: string, time: string): Date {
 }
 
 async function main() {
-  const isProd = process.env.NODE_ENV === "production";
-  // Demo data (sample employees, locations and the 06/10/2026 day) only when asked,
-  // or by default in development. Production gets just the admin + base lists.
-  const demo = process.env.SEED_DEMO ? process.env.SEED_DEMO === "true" : !isProd;
-
-  const adminPassword = process.env.SEED_ADMIN_PASSWORD || (isProd ? "" : "admin@123");
-  if (adminPassword.length < 8) throw new Error("Set SEED_ADMIN_PASSWORD (at least 8 characters) before seeding production.");
-
-  const admin = await db.user.upsert({
-    where: { username: "admin" },
-    update: {},
-    create: { name: "Admin", username: "admin", role: "ADMIN", passwordHash: await bcrypt.hash(adminPassword, 10) },
-  });
+  // Demo data and the default password are used ONLY when SEED_DEMO=true, which
+  // is set by the local `npm run db:start` script. A hosted database (Hostinger
+  // also uses host "localhost") therefore never receives them.
+  const demo = process.env.SEED_DEMO === "true";
+  const adminPassword = process.env.SEED_ADMIN_PASSWORD || (demo ? "admin@123" : "");
+  // The admin is created once; later runs (e.g. every deploy) leave it untouched.
+  let admin = await db.user.findUnique({ where: { username: "admin" } });
+  if (!admin) {
+    if (adminPassword.length < 8) throw new Error("Set SEED_ADMIN_PASSWORD (at least 8 characters) for the first deploy.");
+    admin = await db.user.create({ data: { name: "Admin", username: "admin", role: "ADMIN", passwordHash: await bcrypt.hash(adminPassword, 10) } });
+    console.log("Created user 'admin'.");
+  }
 
   const purposeIds = new Map<string, string>();
   for (const [i, [name, description]] of PURPOSES.entries()) {

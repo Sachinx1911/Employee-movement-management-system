@@ -43,15 +43,15 @@ export async function movementByMonth(): Promise<MonthPoint[]> {
   const from = dateKeyToDb(monthRange(months[0]!.y, months[0]!.m).from);
   const to = dateKeyToDb(monthRange(y, m).to);
 
-  const rows = await db.$queryRaw<{ month: Date; outings: bigint; employees: bigint }[]>`
-    SELECT date_trunc('month', "date")::date AS month,
+  const rows = await db.$queryRaw<{ month: string; outings: bigint | number; employees: bigint | number }[]>`
+    SELECT DATE_FORMAT(\`date\`, '%Y-%m') AS month,
            COUNT(*) AS outings,
-           COUNT(DISTINCT "employeeId") AS employees
-    FROM "Movement"
-    WHERE "status" <> 'VOID' AND "date" BETWEEN ${from} AND ${to}
-    GROUP BY 1`;
+           COUNT(DISTINCT \`employeeId\`) AS employees
+    FROM \`Movement\`
+    WHERE \`status\` <> 'VOID' AND \`date\` BETWEEN ${from} AND ${to}
+    GROUP BY month`;
 
-  const byKey = new Map(rows.map((r) => [dbDateToKey(r.month).slice(0, 7), r]));
+  const byKey = new Map(rows.map((r) => [String(r.month), r]));
   return months.map(({ y: yy, m: mm }) => {
     const key = `${yy}-${String(mm).padStart(2, "0")}`;
     const r = byKey.get(key);

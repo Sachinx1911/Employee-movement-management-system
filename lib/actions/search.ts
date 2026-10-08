@@ -11,7 +11,8 @@ export async function searchAll(raw: string): Promise<SearchHit[]> {
   if (!user || user.role !== "ADMIN") return [];
   const q = raw.trim().slice(0, 60);
   if (q.length < 2) return [];
-  const contains = { contains: q, mode: "insensitive" as const };
+  // MySQL utf8mb4 collation compares case-insensitively.
+  const contains = { contains: q };
 
   const [employees, locations, purposes, authorizers] = await Promise.all([
     db.employee.findMany({

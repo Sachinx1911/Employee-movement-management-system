@@ -30,9 +30,10 @@ const nextConfig: NextConfig = {
   // Every page here is behind login and shows live data, so request-time
   // rendering is the right default; Cache Components stays off.
   cacheComponents: false,
-  output: "standalone",
+  // Standalone output only for Docker/self-hosted builds; Hostinger runs `next start`.
+  output: process.env.BUILD_STANDALONE === "1" ? "standalone" : undefined,
   poweredByHeader: false,
-  serverExternalPackages: ["pg", "@prisma/adapter-pg", "exceljs", "jspdf", "jspdf-autotable"],
+  serverExternalPackages: ["mariadb", "@prisma/adapter-mariadb", "exceljs", "jspdf", "jspdf-autotable"],
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
   },

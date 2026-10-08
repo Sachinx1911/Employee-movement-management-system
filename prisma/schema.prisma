@@ -1,5 +1,5 @@
 // DDSR GROUP — Employee IN / OUT & Movement Management
-// All timestamps are stored as timestamptz (UTC). The business date of a
+// All timestamps are stored in UTC (DATETIME(3)). The business date of a
 // movement (`date`) is derived from the OUT time in APP_TIMEZONE.
 
 generator client {
@@ -8,7 +8,7 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "mysql"
 }
 
 enum Role {
@@ -29,8 +29,8 @@ model User {
   passwordHash String
   role         Role     @default(STAFF)
   active       Boolean  @default(true)
-  createdAt    DateTime @default(now()) @db.Timestamptz(3)
-  updatedAt    DateTime @updatedAt @db.Timestamptz(3)
+  createdAt    DateTime @default(now()) @db.DateTime(3)
+  updatedAt    DateTime @updatedAt @db.DateTime(3)
 
   movementsCreated Movement[] @relation("MovementCreatedBy")
   movementsUpdated Movement[] @relation("MovementUpdatedBy")
@@ -42,8 +42,8 @@ model Department {
   id        String     @id @default(cuid())
   name      String     @unique
   active    Boolean    @default(true)
-  createdAt DateTime   @default(now()) @db.Timestamptz(3)
-  updatedAt DateTime   @updatedAt @db.Timestamptz(3)
+  createdAt DateTime   @default(now()) @db.DateTime(3)
+  updatedAt DateTime   @updatedAt @db.DateTime(3)
   employees Employee[]
 }
 
@@ -57,11 +57,11 @@ model Employee {
   mobile       String?
   email        String?
   joiningDate  DateTime?   @db.Date
-  address      String?
-  notes        String?
+  address      String?     @db.VarChar(300)
+  notes        String?     @db.Text
   active       Boolean     @default(true)
-  createdAt    DateTime    @default(now()) @db.Timestamptz(3)
-  updatedAt    DateTime    @updatedAt @db.Timestamptz(3)
+  createdAt    DateTime    @default(now()) @db.DateTime(3)
+  updatedAt    DateTime    @updatedAt @db.DateTime(3)
   movements    Movement[]
 
   @@index([active])
@@ -71,11 +71,11 @@ model Employee {
 model Purpose {
   id          String     @id @default(cuid())
   name        String     @unique
-  description String?
+  description String?    @db.VarChar(255)
   active    Boolean    @default(true)
   sortOrder Int        @default(0)
-  createdAt DateTime   @default(now()) @db.Timestamptz(3)
-  updatedAt DateTime   @updatedAt @db.Timestamptz(3)
+  createdAt DateTime   @default(now()) @db.DateTime(3)
+  updatedAt DateTime   @updatedAt @db.DateTime(3)
   movements Movement[]
   locations Location[]
 }
@@ -88,8 +88,8 @@ model Location {
   defaultPurposeId String?
   defaultPurpose   Purpose?   @relation(fields: [defaultPurposeId], references: [id], onDelete: SetNull)
   active           Boolean    @default(true)
-  createdAt        DateTime   @default(now()) @db.Timestamptz(3)
-  updatedAt        DateTime   @updatedAt @db.Timestamptz(3)
+  createdAt        DateTime   @default(now()) @db.DateTime(3)
+  updatedAt        DateTime   @updatedAt @db.DateTime(3)
   movements        Movement[]
 
   @@index([active])
@@ -102,8 +102,8 @@ model AuthorizationPerson {
   department  String?
   active    Boolean    @default(true)
   sortOrder Int        @default(0)
-  createdAt DateTime   @default(now()) @db.Timestamptz(3)
-  updatedAt DateTime   @updatedAt @db.Timestamptz(3)
+  createdAt DateTime   @default(now()) @db.DateTime(3)
+  updatedAt DateTime   @updatedAt @db.DateTime(3)
   movements Movement[]
 }
 
@@ -119,26 +119,26 @@ model Movement {
   purpose         Purpose?             @relation(fields: [purposeId], references: [id], onDelete: Restrict)
   authorizedById  String?
   authorizedBy    AuthorizationPerson? @relation(fields: [authorizedById], references: [id], onDelete: Restrict)
-  outTime         DateTime             @db.Timestamptz(3)
-  inTime          DateTime?            @db.Timestamptz(3)
+  outTime         DateTime             @db.DateTime(3)
+  inTime          DateTime?            @db.DateTime(3)
   /// Always computed by the server from inTime - outTime. Never user input.
   durationMinutes Int?
   status          MovementStatus       @default(OUTSIDE)
   /// Equals employeeId while status = OUTSIDE, otherwise NULL.
   /// The unique constraint guarantees one active OUT per employee at DB level.
   activeEmployeeId String?             @unique
-  notes           String?
+  notes           String?  @db.Text
 
   createdById String
   createdBy   User      @relation("MovementCreatedBy", fields: [createdById], references: [id])
-  createdAt   DateTime  @default(now()) @db.Timestamptz(3)
+  createdAt   DateTime  @default(now()) @db.DateTime(3)
   updatedById String?
   updatedBy   User?     @relation("MovementUpdatedBy", fields: [updatedById], references: [id])
-  updatedAt   DateTime  @updatedAt @db.Timestamptz(3)
+  updatedAt   DateTime  @updatedAt @db.DateTime(3)
   voidedById  String?
   voidedBy    User?     @relation("MovementVoidedBy", fields: [voidedById], references: [id])
-  voidedAt    DateTime? @db.Timestamptz(3)
-  voidReason  String?
+  voidedAt    DateTime? @db.DateTime(3)
+  voidReason  String?   @db.VarChar(255)
 
   @@index([employeeId])
   @@index([date])
@@ -157,10 +157,10 @@ model AuditLog {
   action     String
   /// { field: { from, to } } for updates, full snapshot for creates
   changes    Json?
-  summary    String?
+  summary    String?  @db.Text
   userId     String?
   user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
-  createdAt  DateTime @default(now()) @db.Timestamptz(3)
+  createdAt  DateTime @default(now()) @db.DateTime(3)
 
   @@index([entityType, entityId])
   @@index([createdAt])
@@ -171,6 +171,6 @@ model AuditLog {
 model Setting {
   key       String   @id
   value     Json
-  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.DateTime(3)
 }
 
