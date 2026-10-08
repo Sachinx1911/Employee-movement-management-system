@@ -24,8 +24,31 @@ function clientIp(request: Request | undefined): string {
 // Constant-time-ish path for unknown users so response time doesn't reveal them.
 const DUMMY_HASH = "$2b$10$ys84s5FNJOqTGlGV34wGpeml2joEfv7YcSRfRftmrNmwldmr5ZVi6";
 
+// The error `code` reaches the login form: "locked_<unlockEpochMs>" or
+// "invalid_<attemptsLeft>", so it can show a countdown / attempts left.
 class LockedError extends CredentialsSignin {
-  code = "locked";
+  constructor(unlockAt: number) {
+    super();
+    this.code = `locked_${unlockAt}`;
+  }
+}
+class InvalidLogin extends CredentialsSignin {
+  constructor(attemptsLeft: number) {
+    super();
+    this.code = `invalid_${attemptsLeft}`;
+  }
+}
+
+/** When the count of failures in the window drops below `max` again. */
+async function unlockTime(entityType: string, entityId: string, max: number, since: Date) {
+  const rows = await db.auditLog.findMany({
+    where: { entityType, entityId, action: "LOGIN_FAILED", createdAt: { gte: since } },
+    orderBy: { createdAt: "desc" },
+    take: max,
+    select: { createdAt: true },
+  });
+  const oldestThatCounts = rows[max - 1];
+  return oldestThatCounts ? oldestThatCounts.createdAt.getTime() + LOCK_WINDOW_MS : Date.now();
 }
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
@@ -44,7 +67,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           db.auditLog.count({ where: { entityType: "Login", entityId: username, action: "LOGIN_FAILED", createdAt: { gte: since } } }),
           db.auditLog.count({ where: { entityType: "LoginIP", entityId: ip, action: "LOGIN_FAILED", createdAt: { gte: since } } }),
         ]);
-        if (userFailures >= MAX_FAILURES || ipFailures >= MAX_IP_FAILURES) throw new LockedError();
+        if (userFailures >= MAX_FAILURES || ipFailures >= MAX_IP_FAILURES) {
+          const [byUser, byIp] = await Promise.all([
+            userFailures >= MAX_FAILURES ? unlockTime("Login", username, MAX_FAILURES, since) : 0,
+            ipFailures >= MAX_IP_FAILURES ? unlockTime("LoginIP", ip, MAX_IP_FAILURES, since) : 0,
+          ]);
+          throw new LockedError(Math.max(byUser, byIp));
+        }
 
         const user = await db.user.findUnique({ where: { username } });
         const ok = await bcrypt.compare(password, user?.passwordHash ?? DUMMY_HASH);
@@ -55,7 +84,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
               { entityType: "LoginIP", entityId: ip, action: "LOGIN_FAILED" },
             ],
           });
-          return null;
+          const left = MAX_FAILURES - (userFailures + 1);
+          if (left <= 0) throw new LockedError(await unlockTime("Login", username, MAX_FAILURES, since));
+          throw new InvalidLogin(left);
         }
 
         await db.auditLog.create({
