@@ -7,6 +7,7 @@ import { type ActionResult, zodFieldErrors } from "@/lib/action-result";
 import { audit, diff } from "@/lib/audit";
 import { AuthError, getActionUser } from "@/lib/auth-guard";
 import { dateKeyToDb, dbDateToKey, monthRange, todayKey } from "@/lib/date-utils";
+import { EMPLOYEE_CODE_PREFIX, nextEmployeeCode } from "@/lib/employee-code";
 import { blankToNull, departmentNameSchema, employeeSchema } from "@/lib/validations";
 
 const FIELDS = ["name", "code", "departmentId", "designation", "mobile", "email", "joiningDate", "address", "notes", "active"] as const;
@@ -32,6 +33,10 @@ export async function saveEmployee(id: string | null, input: unknown): Promise<A
       return { ok: false, error: "Selected department no longer exists.", fieldErrors: { departmentId: "Select a department" } };
     }
 
+    // New employees always get the next EMP code (assigned below); edits keep or change it.
+    if (id && !v.code) {
+      return { ok: false, error: "Employee code is required.", fieldErrors: { code: "Employee code is required" } };
+    }
     const data = {
       name: v.name,
       code: v.code.toUpperCase(),
@@ -45,9 +50,10 @@ export async function saveEmployee(id: string | null, input: unknown): Promise<A
       active: v.active,
     };
 
-    const saved = await db.$transaction(async (tx) => {
+    const saved = await saveWithRetry(() => db.$transaction(async (tx) => {
       if (!id) {
-        const created = await tx.employee.create({ data });
+        const codes = await tx.employee.findMany({ where: { code: { startsWith: EMPLOYEE_CODE_PREFIX } }, select: { code: true } });
+        const created = await tx.employee.create({ data: { ...data, code: nextEmployeeCode(codes.map((c) => c.code)) } });
         await audit(tx, {
           entityType: "Employee",
           entityId: created.id,
@@ -76,12 +82,12 @@ export async function saveEmployee(id: string | null, input: unknown): Promise<A
         });
       }
       return updated;
-    });
+    }), !id);
 
     revalidatePath("/master-data");
     return {
       ok: true,
-      message: id ? `${saved.name} updated successfully.` : `${saved.name} added successfully.`,
+      message: id ? `${saved.name} updated successfully.` : `${saved.name} added with code ${saved.code}.`,
       data: { id: saved.id },
     };
   } catch (error) {
@@ -91,6 +97,18 @@ export async function saveEmployee(id: string | null, input: unknown): Promise<A
       return { ok: false, error: "Employee code already exists.", fieldErrors: { code: "This code is already used by another employee" } };
     }
     return fail(error);
+  }
+}
+
+/** New-employee saves retry if another admin took the same next code at the same moment. */
+async function saveWithRetry<T>(fn: () => Promise<T>, retry: boolean): Promise<T> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await fn();
+    } catch (error) {
+      const codeClash = error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002";
+      if (!retry || !codeClash || attempt >= 3) throw error;
+    }
   }
 }
 

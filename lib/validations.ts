@@ -7,12 +7,12 @@ const optionalText = (max: number, label: string) =>
 
 export const employeeSchema = z.object({
   name: z.string().trim().min(1, "Employee name is required").max(80, "Name is too long"),
+  // Empty for a new employee: the server assigns the next EMP code.
   code: z
     .string()
     .trim()
-    .min(1, "Employee code is required")
     .max(20, "Code is too long")
-    .regex(/^[A-Za-z0-9_\-/]+$/, "Use letters, numbers, - or / only"),
+    .regex(/^[A-Za-z0-9_\-/]*$/, "Use letters, numbers, - or / only"),
   departmentId: z.string().min(1, "Please select a department"),
   designation: optionalText(80, "Designation"),
   mobile: z

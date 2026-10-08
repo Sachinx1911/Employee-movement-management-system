@@ -8,6 +8,7 @@ import { deleteEmployee, setEmployeeActive } from "@/lib/actions/employees";
 import { deleteMaster, setMasterActive } from "@/lib/actions/masters";
 import type { AuthorizerRow, EmployeeRow, LocationRow, Option, PurposeRow } from "@/lib/queries/masters";
 import { formatDateKey } from "@/lib/date-utils";
+import { nextEmployeeCode } from "@/lib/employee-code";
 import { cn } from "@/lib/utils";
 import { EmployeeForm } from "./employee-form";
 import { EmployeeViewDialog } from "./employee-view-dialog";
@@ -280,6 +281,7 @@ export function MasterDataView({
             {editing?.tab === "employees" && (
               <EmployeeForm
                 employee={editing.row}
+                nextCode={nextEmployeeCode(employees.map((e) => e.code))}
                 departments={departments}
                 onDepartmentAdded={(d) => setAddedDepartments((prev) => [...prev, d])}
                 onClose={close}

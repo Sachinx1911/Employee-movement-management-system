@@ -26,8 +26,8 @@ export const newKey = () => `r${Date.now().toString(36)}${(counter++).toString(3
 export const snapshot = (r: Pick<GridRow, "employeeId" | "locationId" | "purposeId" | "authorizedById" | "outTime" | "inTime">) =>
   [r.employeeId, r.locationId, r.purposeId, r.authorizedById, r.outTime, r.inTime].join("|");
 
-export function blankRow(): GridRow {
-  return { key: newKey(), employeeId: "", locationId: "", purposeId: "", authorizedById: "", outTime: "", inTime: "", inNextDay: false };
+export function blankRow(key: string = newKey()): GridRow {
+  return { key, employeeId: "", locationId: "", purposeId: "", authorizedById: "", outTime: "", inTime: "", inNextDay: false };
 }
 
 export function fromEntry(e: EntryRow): GridRow {
@@ -50,18 +50,22 @@ export const isBlank = (r: GridRow) => !r.id && !r.employeeId && !r.locationId &
 export const isDirty = (r: GridRow) => !r.id ? !isBlank(r) : snapshot(r) !== r.original;
 export const markClean = (r: GridRow): GridRow => ({ ...r, original: snapshot(r) });
 
-export function pad(rows: GridRow[]): GridRow[] {
+export function pad(rows: GridRow[], makeKey: (n: number) => string = () => newKey()): GridRow[] {
   const out = [...rows];
   let blanks = out.filter(isBlank).length;
   while (out.length < MIN_ROWS || blanks < MIN_BLANK) {
-    out.push(blankRow());
+    out.push(blankRow(makeKey(blanks)));
     blanks++;
   }
   return out;
 }
 
+/**
+ * Initial rows. Blank rows get stable keys ("init-0", …) so the server-rendered
+ * HTML and the browser agree (time-based keys would cause a hydration mismatch).
+ */
 export function build(entries: EntryRow[]): GridRow[] {
-  return pad(entries.map(fromEntry));
+  return pad(entries.map(fromEntry), (n) => `init-${n}`);
 }
 
 /**

@@ -43,11 +43,14 @@ function FieldError({ message }: { message?: string }) {
 
 export function EmployeeForm({
   employee,
+  nextCode,
   departments,
   onDepartmentAdded,
   onClose,
 }: {
   employee: EmployeeRow | null;
+  /** Preview of the code a new employee will get (the server assigns it on save). */
+  nextCode: string;
   departments: Department[];
   onDepartmentAdded: (d: Department) => void;
   onClose: () => void;
@@ -118,13 +121,20 @@ export function EmployeeForm({
               <Label htmlFor="emp-code">
                 Employee Code <span className="text-destructive">*</span>
               </Label>
-              <Input
-                id="emp-code"
-                placeholder="Enter employee code"
-                className="h-10 uppercase placeholder:normal-case"
-                aria-invalid={!!errors.code}
-                {...register("code")}
-              />
+              {employee ? (
+                <Input
+                  id="emp-code"
+                  placeholder="Enter employee code"
+                  className="h-10 uppercase placeholder:normal-case"
+                  aria-invalid={!!errors.code}
+                  {...register("code")}
+                />
+              ) : (
+                <>
+                  <Input id="emp-code" value={nextCode} readOnly tabIndex={-1} className="tabular h-10 bg-muted/60 font-semibold" />
+                  <p className="text-xs text-muted-foreground">Assigned automatically when you save.</p>
+                </>
+              )}
               <FieldError message={errors.code?.message} />
             </div>
 
