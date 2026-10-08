@@ -113,7 +113,12 @@ export async function removeLogo(): Promise<ActionResult> {
 
 // ───────────────────────── Users & access ─────────────────────────
 
-const passwordSchema = z.string().min(8, "Password must be at least 8 characters").max(100);
+const passwordSchema = z
+  .string()
+  .min(10, "Password must be at least 10 characters")
+  .max(100, "Password is too long")
+  .regex(/[A-Za-z]/, "Password must contain a letter")
+  .regex(/\d/, "Password must contain a number");
 const userSchema = z.object({
   name: z.string().trim().min(1, "Name is required").max(60),
   username: z
@@ -136,7 +141,7 @@ export async function createUser(input: unknown): Promise<ActionResult> {
     if (!parsed.success) return { ok: false, error: parsed.error.issues[0]!.message };
     const v = parsed.data;
     if (await db.user.findUnique({ where: { username: v.username } })) return { ok: false, error: "This username is already taken." };
-    const u = await db.user.create({ data: { name: v.name, username: v.username, role: v.role, passwordHash: await bcrypt.hash(v.password, 10) } });
+    const u = await db.user.create({ data: { name: v.name, username: v.username, role: v.role, passwordHash: await bcrypt.hash(v.password, 12) } });
     await audit(db, { entityType: "User", entityId: u.id, action: "CREATE", userId: me.id, summary: `User ${u.username} (${u.role}) created` });
     revalidatePath("/settings");
     return { ok: true, message: `User ${u.username} created.` };
@@ -159,7 +164,11 @@ export async function updateUser(id: string, patch: { role?: "ADMIN" | "STAFF"; 
     const changes: Record<string, { from: unknown; to: unknown }> = {};
     if (patch.role && patch.role !== u.role) changes.role = { from: u.role, to: patch.role };
     if (patch.active !== undefined && patch.active !== u.active) changes.active = { from: u.active, to: patch.active };
-    await db.user.update({ where: { id }, data: { role: patch.role ?? u.role, active: patch.active ?? u.active } });
+    const accessChanged = Object.keys(changes).length > 0;
+    await db.user.update({
+      where: { id },
+      data: { role: patch.role ?? u.role, active: patch.active ?? u.active, ...(accessChanged ? { sessionVersion: { increment: 1 } } : {}) },
+    });
     await audit(db, { entityType: "User", entityId: id, action: "UPDATE", userId: me.id, summary: `User ${u.username} updated`, changes });
     revalidatePath("/settings");
     return { ok: true, message: `${u.name} updated.` };
@@ -173,7 +182,7 @@ export async function resetUserPassword(id: string, password: string): Promise<A
     const me = await getActionUser({ admin: true });
     const p = passwordSchema.safeParse(password);
     if (!p.success) return { ok: false, error: p.error.issues[0]!.message };
-    const u = await db.user.update({ where: { id }, data: { passwordHash: await bcrypt.hash(p.data, 10) } });
+    const u = await db.user.update({ where: { id }, data: { passwordHash: await bcrypt.hash(p.data, 12), sessionVersion: { increment: 1 } } });
     await audit(db, { entityType: "User", entityId: id, action: "PASSWORD_RESET", userId: me.id, summary: `Password reset for ${u.username}` });
     return { ok: true, message: `Password reset for ${u.name}.` };
   } catch (error) {
@@ -188,9 +197,10 @@ export async function changeMyPassword(current: string, next: string): Promise<A
     if (!p.success) return { ok: false, error: p.error.issues[0]!.message };
     const u = await db.user.findUnique({ where: { id: me.id } });
     if (!u || !(await bcrypt.compare(current, u.passwordHash))) return { ok: false, error: "Current password is incorrect." };
-    await db.user.update({ where: { id: me.id }, data: { passwordHash: await bcrypt.hash(p.data, 10) } });
+    if (current === p.data) return { ok: false, error: "New password must be different from the current one." };
+    await db.user.update({ where: { id: me.id }, data: { passwordHash: await bcrypt.hash(p.data, 12), sessionVersion: { increment: 1 } } });
     await audit(db, { entityType: "User", entityId: me.id, action: "PASSWORD_CHANGE", userId: me.id, summary: `${u.username} changed password` });
-    return { ok: true, message: "Password changed." };
+    return { ok: true, message: "Password changed. Please sign in again with the new password." };
   } catch (error) {
     return fail(error);
   }

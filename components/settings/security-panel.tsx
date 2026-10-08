@@ -66,9 +66,10 @@ export function SecurityPanel({ audit, page, total, pageSize }: { audit: AuditRo
               const r = await changeMyPassword(current, next);
               if (r.ok) {
                 toast.success(r.message);
-                setCurrent("");
-                setNext("");
-                setConfirm("");
+                // All sessions (including this one) ended; sign in again.
+                // Full navigation: /session-ended is a route handler that clears the cookie.
+                // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+                setTimeout(() => window.location.assign("/session-ended"), 1200);
               } else toast.error(r.error);
             });
           }}
@@ -79,11 +80,12 @@ export function SecurityPanel({ audit, page, total, pageSize }: { audit: AuditRo
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="pw-new">New Password</Label>
-            <Input id="pw-new" type="password" value={next} onChange={(e) => setNext(e.target.value)} autoComplete="new-password" minLength={8} required />
+            <Input id="pw-new" type="password" value={next} onChange={(e) => setNext(e.target.value)} autoComplete="new-password" minLength={10} required />
+            <p className="text-xs text-muted-foreground">At least 10 characters, with letters and numbers.</p>
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="pw-confirm">Confirm New Password</Label>
-            <Input id="pw-confirm" type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} autoComplete="new-password" minLength={8} required />
+            <Input id="pw-confirm" type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} autoComplete="new-password" minLength={10} required />
           </div>
           <Button type="submit" className="w-full" disabled={pending}>
             {pending && <Loader2 className="animate-spin" />} Change Password

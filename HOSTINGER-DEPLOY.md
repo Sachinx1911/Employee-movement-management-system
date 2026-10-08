@@ -63,6 +63,7 @@ node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
 | `NEXT_PUBLIC_APP_TIMEZONE` | `Asia/Kolkata` |
 | `AUTH_TRUST_HOST` | `true` |
 | `AUTH_URL` | तुमच्या site चा पूर्ण पत्ता, उदा. `https://movement.example.com` (Hostinger app ला स्वतःचा domain कळत नाही, म्हणून हे आवश्यक) |
+| `NPM_CONFIG_OMIT` | `dev` (development tools server वर install होत नाहीत — सुरक्षित) |
 | `SEED_ADMIN_PASSWORD` | पहिल्या login साठी admin password (8+ अक्षरे) |
 
 5. Domain निवडा (उदा. `movement.तुमचेdomain.com`) आणि **Deploy** करा.
@@ -116,3 +117,13 @@ GitHub वर `main` branch ला नवीन code push केला की hP
 | App उघडते पण login होत नाही / login नंतर `0.0.0.0:3000` वर जाते | `AUTH_URL` = site चा पूर्ण https पत्ता, `AUTH_SECRET` आणि `AUTH_TRUST_HOST=true` env मध्ये आहेत का |
 | Build log: `Turbopack is not supported on this platform` | build command `npm run build` ठेवा (तो Webpack वापरतो) |
 | Server सुरू होत नाही: `Configuration error` | `AUTH_SECRET` किमान 32 अक्षरांचा हवा |
+
+---
+
+## सुरक्षा (Security)
+
+- Login: एका username साठी 5 चुकीचे प्रयत्न किंवा एका IP वरून 20 चुकीचे प्रयत्न → 15 मिनिटे lock.
+- Password: किमान 10 अक्षरे, अक्षरे + अंक दोन्ही आवश्यक.
+- Password बदलला / reset केला, user deactivate केला किंवा role बदलला → त्या user चे सर्व जुने login लगेच बंद.
+- `SEED_ADMIN_PASSWORD` पहिल्या deploy नंतर Environment variables मधून काढून टाका.
+- `NPM_CONFIG_OMIT=dev` ठेवा — production मध्ये फक्त आवश्यक packages (0 known vulnerabilities).

@@ -1,15 +1,34 @@
 import "server-only";
 import { redirect } from "next/navigation";
+import { cache } from "react";
 import { auth } from "@/auth";
+import { db } from "@/lib/db";
 
 export type SessionUser = { id: string; name: string; username: string; role: "ADMIN" | "STAFF" };
 
-/** For pages: returns the signed-in user or redirects to /login. */
+/**
+ * The signed-in user, re-checked against the database on every request:
+ * a deactivated user, a changed/reset password or a role change ends older
+ * sessions immediately, and the role always comes from the database.
+ */
+const currentUser = cache(async (): Promise<SessionUser | null> => {
+  const session = await auth();
+  const id = session?.user?.id;
+  if (!id) return null;
+  const user = await db.user.findUnique({
+    where: { id },
+    select: { id: true, name: true, username: true, role: true, active: true, sessionVersion: true },
+  });
+  if (!user || !user.active || user.sessionVersion !== (session.user.sessionVersion ?? 0)) return null;
+  return { id: user.id, name: user.name, username: user.username, role: user.role };
+});
+
+/** For pages: returns the signed-in user, or ends the session and goes to /login. */
 export async function requireUser(): Promise<SessionUser> {
   const session = await auth();
-  if (!session?.user?.id) redirect("/login");
-  const { id, name, username, role } = session.user;
-  return { id, name: name ?? username, username, role };
+  const user = await currentUser();
+  if (!user) redirect(session?.user ? "/session-ended" : "/login");
+  return user;
 }
 
 /** For admin-only pages: redirects staff back to the dashboard. */
@@ -23,9 +42,8 @@ export class AuthError extends Error {}
 
 /** For server actions: throws instead of redirecting. */
 export async function getActionUser(opts: { admin?: boolean } = {}): Promise<SessionUser> {
-  const session = await auth();
-  if (!session?.user?.id) throw new AuthError("Your session has expired. Please log in again.");
-  const { id, name, username, role } = session.user;
-  if (opts.admin && role !== "ADMIN") throw new AuthError("Only an admin can perform this action.");
-  return { id, name: name ?? username, username, role };
+  const user = await currentUser();
+  if (!user) throw new AuthError("Your session has ended. Please log in again.");
+  if (opts.admin && user.role !== "ADMIN") throw new AuthError("Only an admin can perform this action.");
+  return user;
 }

@@ -29,6 +29,8 @@ model User {
   passwordHash String
   role         Role     @default(STAFF)
   active       Boolean  @default(true)
+  /// Bumped on password change/reset, deactivation or role change; older sessions stop working.
+  sessionVersion Int    @default(0)
   createdAt    DateTime @default(now()) @db.DateTime(3)
   updatedAt    DateTime @updatedAt @db.DateTime(3)
 

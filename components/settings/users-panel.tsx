@@ -128,8 +128,8 @@ export function UsersPanel({ users, meId }: { users: UserRow[]; meId: string }) 
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="u-pass">Password</Label>
-              <Input id="u-pass" type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} required minLength={8} autoComplete="new-password" />
-              <p className="text-xs text-muted-foreground">At least 8 characters.</p>
+              <Input id="u-pass" type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} required minLength={10} autoComplete="new-password" />
+              <p className="text-xs text-muted-foreground">At least 10 characters, with letters and numbers.</p>
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setAdding(false)}>
@@ -147,7 +147,7 @@ export function UsersPanel({ users, meId }: { users: UserRow[]; meId: string }) 
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
             <DialogTitle>Reset password</DialogTitle>
-            <DialogDescription>Set a new password for {resetFor?.name}.</DialogDescription>
+            <DialogDescription>Set a new password for {resetFor?.name}. They will be signed out everywhere.</DialogDescription>
           </DialogHeader>
           <form
             className="space-y-3"
@@ -159,7 +159,7 @@ export function UsersPanel({ users, meId }: { users: UserRow[]; meId: string }) 
               });
             }}
           >
-            <Input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="New password (min 8 characters)" minLength={8} required autoComplete="new-password" autoFocus />
+            <Input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="New password (min 10, letters + numbers)" minLength={10} required autoComplete="new-password" autoFocus />
             <DialogFooter>
               <Button type="submit" disabled={pending}>
                 {pending && <Loader2 className="animate-spin" />} Reset Password
