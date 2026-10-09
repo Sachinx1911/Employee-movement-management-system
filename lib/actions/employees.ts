@@ -7,7 +7,7 @@ import { type ActionResult, zodFieldErrors } from "@/lib/action-result";
 import { audit, diff } from "@/lib/audit";
 import { AuthError, getActionUser } from "@/lib/auth-guard";
 import { dateKeyToDb, dbDateToKey, monthRange, todayKey } from "@/lib/date-utils";
-import { EMPLOYEE_CODE_PREFIX, nextEmployeeCode } from "@/lib/employee-code";
+import { nextEmployeeCode } from "@/lib/employee-code";
 import { blankToNull, departmentNameSchema, employeeSchema } from "@/lib/validations";
 
 const FIELDS = ["name", "code", "departmentId", "designation", "mobile", "email", "joiningDate", "address", "notes", "active"] as const;
@@ -52,7 +52,9 @@ export async function saveEmployee(id: string | null, input: unknown): Promise<A
 
     const saved = await saveWithRetry(() => db.$transaction(async (tx) => {
       if (!id) {
-        const codes = await tx.employee.findMany({ where: { code: { startsWith: EMPLOYEE_CODE_PREFIX } }, select: { code: true } });
+        // No LIKE filter here: MariaDB 11 rejects Prisma's `LIKE CONCAT(?, '%')`
+        // (collation mix), and the employee list is small enough to scan in JS.
+        const codes = await tx.employee.findMany({ where: { code: { not: null } }, select: { code: true } });
         const created = await tx.employee.create({ data: { ...data, code: nextEmployeeCode(codes.map((c) => c.code)) } });
         await audit(tx, {
           entityType: "Employee",
