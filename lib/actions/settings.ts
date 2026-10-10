@@ -9,8 +9,9 @@ import type { ActionResult } from "@/lib/action-result";
 import { DEFAULT_APP_SETTINGS, normalizeAppSettings } from "@/lib/app-settings";
 import { audit } from "@/lib/audit";
 import { AuthError, getActionUser, type SessionUser } from "@/lib/auth-guard";
+import { normalizeRolePermissions } from "@/lib/permissions";
 import { normalizeReportOptions } from "@/lib/report-generator";
-import { isSuperAdmin, type Role } from "@/lib/roles";
+import { atLeast, type Role } from "@/lib/roles";
 
 function fail(error: unknown, fallback = "Something went wrong. Please try again."): { ok: false; error: string } {
   if (error instanceof AuthError) return { ok: false, error: error.message };
@@ -23,7 +24,7 @@ function fail(error: unknown, fallback = "Something went wrong. Please try again
 /** Persist WhatsApp report preferences (admin only). */
 export async function saveReportOptions(input: unknown): Promise<ActionResult> {
   try {
-    const user = await getActionUser({ admin: true });
+    const user = await getActionUser({ perm: "reports.dailyOptions" });
     const value = normalizeReportOptions(input);
     const before = await db.setting.findUnique({ where: { key: "whatsappReport" } });
     await db.$transaction(async (tx) => {
@@ -49,11 +50,41 @@ export async function saveReportOptions(input: unknown): Promise<ActionResult> {
   }
 }
 
+// ───────────────────────── Roles & permissions ─────────────────────────
+
+/** Which role gets which access. Super admin only; super admins always keep everything. */
+export async function saveRolePermissions(input: unknown): Promise<ActionResult> {
+  try {
+    const user = await getActionUser({ superAdmin: true });
+    const value = normalizeRolePermissions(input);
+    const before = await db.setting.findUnique({ where: { key: "permissions" } });
+    await db.$transaction(async (tx) => {
+      await tx.setting.upsert({
+        where: { key: "permissions" },
+        update: { value: value as Prisma.InputJsonValue },
+        create: { key: "permissions", value: value as Prisma.InputJsonValue },
+      });
+      await audit(tx, {
+        entityType: "Setting",
+        entityId: "permissions",
+        action: "UPDATE",
+        userId: user.id,
+        summary: "Role permissions changed",
+        changes: { from: before?.value ?? null, to: value },
+      });
+    });
+    revalidatePath("/", "layout");
+    return { ok: true, message: "Permissions saved. They apply immediately." };
+  } catch (error) {
+    return fail(error, "Could not save permissions.");
+  }
+}
+
 // ───────────────────────── App settings ─────────────────────────
 
 export async function saveAppSettings(input: unknown): Promise<ActionResult> {
   try {
-    const user = await getActionUser({ admin: true });
+    const user = await getActionUser({ perm: "settings.manage" });
     const value = normalizeAppSettings(input);
     if (value.workingHours.end <= value.workingHours.start) return { ok: false, error: "Office end time must be after start time." };
     if (value.workingHours.lunchEnd <= value.workingHours.lunchStart) return { ok: false, error: "Lunch end must be after lunch start." };
@@ -85,7 +116,7 @@ const MAX_LOGO_BYTES = 2 * 1024 * 1024;
 
 export async function saveLogo(dataUrl: string): Promise<ActionResult> {
   try {
-    const user = await getActionUser({ admin: true });
+    const user = await getActionUser({ perm: "settings.manage" });
     const m = /^data:image\/(png|jpeg);base64,([A-Za-z0-9+/=]+)$/.exec(dataUrl);
     if (!m) return { ok: false, error: "Logo must be a PNG or JPG image." };
     if ((m[2]!.length * 3) / 4 > MAX_LOGO_BYTES) return { ok: false, error: "Logo must be 2 MB or smaller." };
@@ -102,7 +133,7 @@ export async function saveLogo(dataUrl: string): Promise<ActionResult> {
 
 export async function removeLogo(): Promise<ActionResult> {
   try {
-    const user = await getActionUser({ admin: true });
+    const user = await getActionUser({ perm: "settings.manage" });
     await db.setting.deleteMany({ where: { key: "logo" } });
     await audit(db, { entityType: "Setting", entityId: "logo", action: "DELETE", userId: user.id, summary: "Company logo removed" });
     revalidatePath("/", "layout");
@@ -136,22 +167,23 @@ async function hasAnotherSuperAdmin(excludingId: string) {
 }
 
 /**
- * A user the signed-in admin may manage. Super admin accounts do not exist
- * for an ADMIN: they get the same "not found" as a wrong id.
+ * A user the signed-in user may manage: only accounts at or below their own
+ * role. Higher accounts (e.g. super admins for an ADMIN) get the same
+ * "not found" as a wrong id.
  */
 async function manageableUser(me: SessionUser, id: string) {
   const u = await db.user.findUnique({ where: { id } });
-  if (!u || (u.role === "SUPER_ADMIN" && !isSuperAdmin(me.role))) return null;
+  if (!u || !atLeast(me.role, u.role)) return null;
   return u;
 }
 
 export async function createUser(input: unknown): Promise<ActionResult> {
   try {
-    const me = await getActionUser({ admin: true });
+    const me = await getActionUser({ perm: "users.manage" });
     const parsed = userSchema.safeParse(input);
     if (!parsed.success) return { ok: false, error: parsed.error.issues[0]!.message };
     const v = parsed.data;
-    if (v.role === "SUPER_ADMIN" && !isSuperAdmin(me.role)) return { ok: false, error: "Invalid role." };
+    if (!atLeast(me.role, v.role)) return { ok: false, error: "Invalid role." };
     if (await db.user.findUnique({ where: { username: v.username } })) return { ok: false, error: "This username is already taken." };
     const u = await db.user.create({ data: { name: v.name, username: v.username, role: v.role, passwordHash: await bcrypt.hash(v.password, 12) } });
     await audit(db, { entityType: "User", entityId: u.id, action: "CREATE", userId: me.id, summary: `User ${u.username} (${u.role}) created` });
@@ -164,13 +196,13 @@ export async function createUser(input: unknown): Promise<ActionResult> {
 
 export async function updateUser(id: string, patch: { role?: Role; active?: boolean }): Promise<ActionResult> {
   try {
-    const me = await getActionUser({ admin: true });
+    const me = await getActionUser({ perm: "users.manage" });
     const parsedRole = patch.role === undefined ? undefined : z.enum(["SUPER_ADMIN", "ADMIN", "STAFF"]).safeParse(patch.role);
     if (parsedRole && !parsedRole.success) return { ok: false, error: "Invalid role." };
     if (patch.active !== undefined && typeof patch.active !== "boolean") return { ok: false, error: "Invalid status." };
     const u = await manageableUser(me, id);
     if (!u) return { ok: false, error: "User not found." };
-    if (patch.role === "SUPER_ADMIN" && !isSuperAdmin(me.role)) return { ok: false, error: "Invalid role." };
+    if (patch.role && !atLeast(me.role, patch.role)) return { ok: false, error: "Invalid role." };
     const roleChanging = patch.role !== undefined && patch.role !== u.role;
     const deactivating = patch.active === false && u.active;
     if (id === me.id && (roleChanging || deactivating)) return { ok: false, error: "You cannot change your own role or deactivate yourself." };
@@ -195,7 +227,7 @@ export async function updateUser(id: string, patch: { role?: Role; active?: bool
 
 export async function resetUserPassword(id: string, password: string): Promise<ActionResult> {
   try {
-    const me = await getActionUser({ admin: true });
+    const me = await getActionUser({ perm: "users.manage" });
     const p = passwordSchema.safeParse(password);
     if (!p.success) return { ok: false, error: p.error.issues[0]!.message };
     if (!(await manageableUser(me, id))) return { ok: false, error: "User not found." };

@@ -84,14 +84,18 @@ export function EntryGrid({
   entries,
   options,
   pending,
-  isAdmin,
+  canCreate,
+  canEditAll,
+  canDelete,
   showPending,
 }: {
   date: DateKey;
   entries: EntryRow[];
   options: EntryOptions;
   pending: PendingIn[];
-  isAdmin: boolean;
+  canCreate: boolean;
+  canEditAll: boolean;
+  canDelete: boolean;
   showPending: boolean;
 }) {
   const router = useRouter();
@@ -205,6 +209,8 @@ export function EntryGrid({
   }, [rows, errors, flush]);
 
   const busy = savingKeys.size > 0;
+  // Without "create" permission the empty rows for new entries are not shown.
+  const shown = canCreate ? rows : rows.filter((r) => !!r.id);
   const dirtyRows = rows.filter((r) => isDirty(r) && !isBlank(r));
   const hasUnsaved = dirtyRows.length > 0 || busy;
   useEffect(() => {
@@ -306,7 +312,7 @@ export function EntryGrid({
 
   /** Field set shared by the desktop row and the mobile card. */
   const fields = (row: GridRow) => {
-    const locked = !!row.id && !isAdmin && !(row.savedStatus === "OUTSIDE" && isToday);
+    const locked = !!row.id && !canEditAll && !(row.savedStatus === "OUTSIDE" && isToday);
     const err = errors[row.key];
     const blank = isBlank(row);
     const invalidTime = rowState(row) === "invalid";
@@ -371,7 +377,8 @@ export function EntryGrid({
               Mark IN
             </Button>
           ) : (
-            !blank && (
+            !blank &&
+            canCreate && (
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button type="button" tabIndex={-1} onClick={() => duplicate(row)} className="flex size-8 items-center justify-center rounded-lg text-blue-600 hover:bg-blue-50" aria-label="Duplicate row">
@@ -382,7 +389,7 @@ export function EntryGrid({
               </Tooltip>
             )
           )}
-          {(!row.id || isAdmin) && (
+          {(row.id ? canDelete : canCreate) && (
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
@@ -493,7 +500,7 @@ export function EntryGrid({
               </tr>
             </thead>
             <tbody>
-              {rows.map((row, i) => {
+              {shown.map((row, i) => {
                 const f = fields(row);
                 return (
                   <tr
@@ -533,9 +540,11 @@ export function EntryGrid({
           </table>
         </div>
         <div className="flex flex-wrap items-center gap-3 border-t p-3">
-          <Button variant="secondary" className="h-11 bg-blue-50 px-5 text-primary hover:bg-blue-100" onClick={() => setRows((rs) => [...rs, blankRow()])}>
-            <Plus /> Add Row
-          </Button>
+          {canCreate && (
+            <Button variant="secondary" className="h-11 bg-blue-50 px-5 text-primary hover:bg-blue-100" onClick={() => setRows((rs) => [...rs, blankRow()])}>
+              <Plus /> Add Row
+            </Button>
+          )}
           <div className="ml-auto flex items-center gap-4">
             {statusLine}
             {dirtyRows.length > 0 && !busy && (
@@ -549,7 +558,7 @@ export function EntryGrid({
 
       {/* Mobile cards */}
       <div className="space-y-3 md:hidden">
-        {rows
+        {shown
           .filter((r, i, all) => !isBlank(r) || all.findIndex(isBlank) === i)
           .map((row) => {
             const f = fields(row);
@@ -599,9 +608,11 @@ export function EntryGrid({
             );
           })}
         <div className="sticky bottom-[76px] z-20 flex items-center gap-2 rounded-2xl border bg-card/95 p-2 shadow-lg backdrop-blur">
-          <Button variant="outline" className="h-12 px-4" onClick={() => setRows((rs) => [...rs, blankRow()])}>
-            <Plus /> Add
-          </Button>
+          {canCreate && (
+            <Button variant="outline" className="h-12 px-4" onClick={() => setRows((rs) => [...rs, blankRow()])}>
+              <Plus /> Add
+            </Button>
+          )}
           <div className="min-w-0 flex-1 px-1">{statusLine}</div>
         </div>
       </div>

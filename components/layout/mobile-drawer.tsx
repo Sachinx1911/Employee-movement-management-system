@@ -5,9 +5,9 @@ import { Menu } from "lucide-react";
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { SidebarNav } from "./sidebar-nav";
-import type { Role } from "@/lib/roles";
+import type { Permission } from "@/lib/permissions";
 
-export function MobileDrawer({ role, footer, brand }: { role: Role; footer: ReactNode; brand: ReactNode }) {
+export function MobileDrawer({ permissions, footer, brand }: { permissions: Permission[]; footer: ReactNode; brand: ReactNode }) {
   const [open, setOpen] = useState(false);
   return (
     <Sheet open={open} onOpenChange={setOpen}>
@@ -24,7 +24,7 @@ export function MobileDrawer({ role, footer, brand }: { role: Role; footer: Reac
           </div>
           <div className="flex-1 overflow-y-auto">
             <Suspense>
-              <SidebarNav role={role} onNavigate={() => setOpen(false)} />
+              <SidebarNav permissions={permissions} onNavigate={() => setOpen(false)} />
             </Suspense>
           </div>
           {footer}

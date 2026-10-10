@@ -48,6 +48,7 @@ export function MasterDataView({
   purposes,
   authorizers,
   departments: initialDepartments,
+  allowed,
 }: {
   initialTab: MasterTab;
   initialQuery: string;
@@ -56,13 +57,16 @@ export function MasterDataView({
   purposes: PurposeRow[];
   authorizers: AuthorizerRow[];
   departments: Option[];
+  /** Tabs this user has permission for (at least one). */
+  allowed: MasterTab[];
 }) {
+  const tabs = TABS.filter((t) => allowed.includes(t.id));
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const urlTab = searchParams.get("tab") as MasterTab | null;
   const [pendingTab, setPendingTab] = useState<MasterTab | null>(null);
-  const tab: MasterTab = pendingTab ?? (urlTab && TABS.some((t) => t.id === urlTab) ? urlTab : initialTab);
+  const tab: MasterTab = pendingTab ?? (urlTab && tabs.some((t) => t.id === urlTab) ? urlTab : initialTab);
   const [editing, setEditing] = useState<Editing | null>(null);
   const [viewing, setViewing] = useState<EmployeeRow | null>(null);
   const [deleting, setDeleting] = useState<DeleteTarget | null>(null);
@@ -100,7 +104,7 @@ export function MasterDataView({
       </div>
 
       <div role="tablist" aria-label="Master data sections" className="mb-5 grid grid-cols-2 gap-2 rounded-xl border bg-card p-1 sm:grid-cols-4">
-        {TABS.map(({ id, label, icon: Icon }) => (
+        {tabs.map(({ id, label, icon: Icon }) => (
           <button
             key={id}
             role="tab"

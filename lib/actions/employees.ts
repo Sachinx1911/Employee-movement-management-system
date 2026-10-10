@@ -22,7 +22,7 @@ function fail(error: unknown): { ok: false; error: string } {
 
 export async function saveEmployee(id: string | null, input: unknown): Promise<ActionResult<{ id: string }>> {
   try {
-    const user = await getActionUser({ admin: true });
+    const user = await getActionUser({ perm: "masters.employees" });
     const parsed = employeeSchema.safeParse(input);
     if (!parsed.success) {
       return { ok: false, error: "Please correct the highlighted fields.", fieldErrors: zodFieldErrors(parsed.error.issues) };
@@ -122,7 +122,7 @@ class StillOutside extends Error {
 
 export async function setEmployeeActive(id: string, active: boolean): Promise<ActionResult> {
   try {
-    const user = await getActionUser({ admin: true });
+    const user = await getActionUser({ perm: "masters.employees" });
     const emp = await db.employee.findUnique({ where: { id } });
     if (!emp) return { ok: false, error: "This employee no longer exists." };
     if (emp.active === active) return { ok: true, message: `${emp.name} is already ${active ? "active" : "inactive"}.` };
@@ -150,7 +150,7 @@ export async function setEmployeeActive(id: string, active: boolean): Promise<Ac
 /** Hard delete only when there is no movement history; otherwise the UI offers deactivate. */
 export async function deleteEmployee(id: string): Promise<ActionResult> {
   try {
-    const user = await getActionUser({ admin: true });
+    const user = await getActionUser({ perm: "masters.employees" });
     const emp = await db.employee.findUnique({ where: { id }, include: { _count: { select: { movements: true } } } });
     if (!emp) return { ok: false, error: "This employee no longer exists." };
     if (emp._count.movements > 0) {
@@ -176,7 +176,7 @@ export async function deleteEmployee(id: string): Promise<ActionResult> {
 
 export async function createDepartment(name: string): Promise<ActionResult<{ id: string; name: string }>> {
   try {
-    const user = await getActionUser({ admin: true });
+    const user = await getActionUser({ perm: "masters.employees" });
     const parsed = departmentNameSchema.safeParse(name);
     if (!parsed.success) return { ok: false, error: parsed.error.issues[0]!.message };
     const existing = await db.department.findFirst({ where: { name: { equals: parsed.data } } });
@@ -206,7 +206,7 @@ export type EmployeeDetails = {
 
 export async function getEmployeeDetails(id: string): Promise<ActionResult<EmployeeDetails>> {
   try {
-    await getActionUser();
+    await getActionUser({ perm: "masters.employees" });
     const [y, m] = todayKey().split("-").map(Number);
     const { from, to } = monthRange(y, m);
     const notVoid = { employeeId: id, status: { not: "VOID" as const } };

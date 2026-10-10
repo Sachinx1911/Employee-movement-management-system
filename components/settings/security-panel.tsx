@@ -43,7 +43,19 @@ function ChangeDetails({ changes }: { changes: unknown }) {
   );
 }
 
-export function SecurityPanel({ audit, page, total, pageSize }: { audit: AuditRow[]; page: number; total: number; pageSize: number }) {
+export function SecurityPanel({
+  audit,
+  page,
+  total,
+  pageSize,
+  showAudit,
+}: {
+  audit: AuditRow[];
+  page: number;
+  total: number;
+  pageSize: number;
+  showAudit: boolean;
+}) {
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -93,6 +105,7 @@ export function SecurityPanel({ audit, page, total, pageSize }: { audit: AuditRo
         </form>
       </SectionCard>
 
+      {showAudit && (
       <SectionCard icon={History} title="Audit Log" subtitle="Every create, edit, mark IN, delete and login — who did it and when.">
         <div className="overflow-x-auto">
           <table className="w-full min-w-[700px] text-[13px]">
@@ -146,6 +159,7 @@ export function SecurityPanel({ audit, page, total, pageSize }: { audit: AuditRo
           </div>
         </div>
       </SectionCard>
+      )}
     </div>
   );
 }

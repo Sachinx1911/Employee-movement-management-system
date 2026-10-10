@@ -4,9 +4,9 @@ import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { ChevronDown } from "lucide-react";
-import { navForRole, type NavItem } from "@/lib/navigation";
+import { navFor, type NavItem } from "@/lib/navigation";
 import { cn } from "@/lib/utils";
-import type { Role } from "@/lib/roles";
+import type { Permission } from "@/lib/permissions";
 
 const itemClass = (active: boolean) =>
   cn(
@@ -48,12 +48,12 @@ function Group({ item, pathname, tab, onNavigate }: { item: NavItem; pathname: s
   );
 }
 
-export function SidebarNav({ role, onNavigate }: { role: Role; onNavigate?: () => void }) {
+export function SidebarNav({ permissions, onNavigate }: { permissions: Permission[]; onNavigate?: () => void }) {
   const pathname = usePathname();
   const tab = useSearchParams().get("tab");
   return (
     <nav className="flex flex-col gap-1">
-      {navForRole(role).map((item) => {
+      {navFor(permissions).map((item) => {
         if (item.children) return <Group key={item.href} item={item} pathname={pathname} tab={tab} onNavigate={onNavigate} />;
         const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
         const Icon = item.icon;

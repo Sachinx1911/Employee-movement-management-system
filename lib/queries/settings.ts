@@ -3,7 +3,7 @@ import { cache } from "react";
 import { db } from "@/lib/db";
 import type { Prisma } from "@/lib/generated/prisma/client";
 import { normalizeAppSettings, type AppSettings } from "@/lib/app-settings";
-import { isSuperAdmin, type Role } from "@/lib/roles";
+import { isSuperAdmin, rolesUpTo, type Role } from "@/lib/roles";
 
 /** Per-request cached read of the "app" settings row. */
 export const getAppSettings = cache(async (): Promise<AppSettings> => {
@@ -17,10 +17,10 @@ export const getLogo = cache(async (): Promise<string | null> => {
   return typeof v?.dataUrl === "string" ? v.dataUrl : null;
 });
 
-/** Users the viewer may see: an ADMIN never sees SUPER_ADMIN accounts. */
+/** Users the viewer may see: only their own role and lower (an ADMIN never sees SUPER_ADMIN accounts). */
 export async function listUsers(viewer: Role) {
   return db.user.findMany({
-    where: isSuperAdmin(viewer) ? {} : { role: { not: "SUPER_ADMIN" } },
+    where: { role: { in: rolesUpTo(viewer) } },
     orderBy: [{ role: "asc" }, { name: "asc" }],
     select: { id: true, name: true, username: true, role: true, active: true, createdAt: true },
   });

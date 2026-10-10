@@ -1,12 +1,13 @@
-import { auth } from "@/auth";
+import { can, getActionUser } from "@/lib/auth-guard";
 import { getAppSettings } from "@/lib/queries/settings";
 import { isDateKey, todayKey } from "@/lib/date-utils";
 import { dailyCsv, dailyPdf, dailyXlsx } from "@/lib/exports";
 import { getDailyReport, parseDailyFilters } from "@/lib/queries/reports";
 
 export async function GET(request: Request) {
-  const session = await auth();
-  if (!session?.user) return new Response("Unauthorized", { status: 401 });
+  const user = await getActionUser().catch(() => null);
+  if (!user) return new Response("Unauthorized", { status: 401 });
+  if (!can(user, "reports.daily")) return new Response("Forbidden", { status: 403 });
 
   const url = new URL(request.url);
   const sp = Object.fromEntries(url.searchParams);

@@ -7,6 +7,7 @@ import { type ActionResult, zodFieldErrors } from "@/lib/action-result";
 import { audit, diff } from "@/lib/audit";
 import { AuthError, getActionUser } from "@/lib/auth-guard";
 import { authorizerSchema, blankToNull, locationSchema, purposeSchema } from "@/lib/validations";
+import type { Permission } from "@/lib/permissions";
 
 // Locations, purposes and authorized persons share the same lifecycle:
 // create / edit / activate-deactivate, and hard delete only when unused.
@@ -15,6 +16,7 @@ export type MasterKind = "location" | "purpose" | "authorizer";
 
 const LABEL: Record<MasterKind, string> = { location: "Location", purpose: "Purpose", authorizer: "Authorized person" };
 const ENTITY: Record<MasterKind, string> = { location: "Location", purpose: "Purpose", authorizer: "AuthorizationPerson" };
+const KIND_PERMISSION: Record<MasterKind, Permission> = { location: "masters.locations", purpose: "masters.purposes", authorizer: "masters.authorizers" };
 
 type Row = { id: string; name: string; active: boolean; _count: { movements: number } };
 
@@ -60,7 +62,7 @@ function done(message: string): ActionResult {
 
 export async function saveLocation(id: string | null, input: unknown): Promise<ActionResult> {
   try {
-    const user = await getActionUser({ admin: true });
+    const user = await getActionUser({ perm: "masters.locations" });
     const parsed = locationSchema.safeParse(input);
     if (!parsed.success) return { ok: false, error: "Please correct the highlighted fields.", fieldErrors: zodFieldErrors(parsed.error.issues) };
     const v = parsed.data;
@@ -97,7 +99,7 @@ export async function saveLocation(id: string | null, input: unknown): Promise<A
 
 export async function savePurpose(id: string | null, input: unknown): Promise<ActionResult> {
   try {
-    const user = await getActionUser({ admin: true });
+    const user = await getActionUser({ perm: "masters.purposes" });
     const parsed = purposeSchema.safeParse(input);
     if (!parsed.success) return { ok: false, error: "Please correct the highlighted fields.", fieldErrors: zodFieldErrors(parsed.error.issues) };
     const v = parsed.data;
@@ -126,7 +128,7 @@ export async function savePurpose(id: string | null, input: unknown): Promise<Ac
 
 export async function saveAuthorizer(id: string | null, input: unknown): Promise<ActionResult> {
   try {
-    const user = await getActionUser({ admin: true });
+    const user = await getActionUser({ perm: "masters.authorizers" });
     const parsed = authorizerSchema.safeParse(input);
     if (!parsed.success) return { ok: false, error: "Please correct the highlighted fields.", fieldErrors: zodFieldErrors(parsed.error.issues) };
     const v = parsed.data;
@@ -158,7 +160,7 @@ export async function saveAuthorizer(id: string | null, input: unknown): Promise
 
 export async function setMasterActive(kind: MasterKind, id: string, active: boolean): Promise<ActionResult> {
   try {
-    const user = await getActionUser({ admin: true });
+    const user = await getActionUser({ perm: KIND_PERMISSION[kind] });
     const row = await repo[kind].find(id);
     if (!row) throw new NotFound();
     if (row.active === active) return done(`${row.name} is already ${active ? "active" : "inactive"}.`);
@@ -182,7 +184,7 @@ export async function setMasterActive(kind: MasterKind, id: string, active: bool
 /** Permanently delete only when no movement references it; otherwise deactivate instead. */
 export async function deleteMaster(kind: MasterKind, id: string): Promise<ActionResult> {
   try {
-    const user = await getActionUser({ admin: true });
+    const user = await getActionUser({ perm: KIND_PERMISSION[kind] });
     const row = await repo[kind].find(id);
     if (!row) throw new NotFound();
     if (row._count.movements > 0) {

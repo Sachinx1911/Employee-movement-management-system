@@ -15,3 +15,10 @@ export const ROLE_LABEL: Record<Role, string> = {
 
 /** Long form for the user menu / sidebar card. */
 export const roleTitle = (role: Role) => (role === "SUPER_ADMIN" ? "Super Administrator" : role === "ADMIN" ? "Administrator" : "Staff");
+
+const RANK: Record<Role, number> = { STAFF: 0, ADMIN: 1, SUPER_ADMIN: 2 };
+/** A user may only give / manage roles up to their own level. */
+export const atLeast = (a: Role, b: Role) => RANK[a] >= RANK[b];
+export const ALL_ROLES: Role[] = ["SUPER_ADMIN", "ADMIN", "STAFF"];
+/** Roles a user may see, give and manage: their own and lower. */
+export const rolesUpTo = (role: Role) => ALL_ROLES.filter((r) => atLeast(role, r));

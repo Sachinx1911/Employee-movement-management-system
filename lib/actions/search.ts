@@ -2,7 +2,6 @@
 
 import { db } from "@/lib/db";
 import { getActionUser } from "@/lib/auth-guard";
-import { isAdmin } from "@/lib/roles";
 
 export type SearchHit = { type: "employees" | "locations" | "purposes" | "authorizers"; id: string; title: string; subtitle: string };
 
@@ -13,8 +12,8 @@ export type SearchHit = { type: "employees" | "locations" | "purposes" | "author
  * are small (hundreds of rows at most).
  */
 export async function searchAll(raw: string): Promise<SearchHit[]> {
-  const user = await getActionUser().catch(() => null);
-  if (!user || !isAdmin(user.role)) return [];
+  const user = await getActionUser({ perm: "search.global" }).catch(() => null);
+  if (!user) return [];
   const q = raw.trim().slice(0, 60).toLowerCase();
   if (q.length < 2) return [];
   const hit = (...fields: (string | null)[]) => fields.some((f) => f?.toLowerCase().includes(q));

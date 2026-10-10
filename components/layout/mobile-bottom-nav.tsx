@@ -2,18 +2,20 @@
 
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { MOBILE_NAV } from "@/lib/navigation";
+import { MOBILE_NAV, navFor } from "@/lib/navigation";
+import type { Permission } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
 
-export function MobileBottomNav() {
+export function MobileBottomNav({ permissions }: { permissions: Permission[] }) {
+  const items = navFor(permissions, MOBILE_NAV);
   const pathname = usePathname();
   const tab = useSearchParams().get("tab");
   const current = pathname + (tab ? `?tab=${tab}` : "");
 
   return (
     <nav className="no-print fixed inset-x-0 bottom-0 z-40 border-t bg-card/95 pb-[env(safe-area-inset-bottom)] backdrop-blur lg:hidden">
-      <div className="mx-auto grid max-w-lg grid-cols-4">
-        {MOBILE_NAV.map((item) => {
+      <div className="mx-auto grid max-w-lg" style={{ gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))` }}>
+        {items.map((item) => {
           const active = current === item.href || (item.href === pathname && !tab);
           const Icon = item.icon;
           const primary = item.label === "OUT";

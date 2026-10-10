@@ -1,12 +1,11 @@
 import { getActionUser } from "@/lib/auth-guard";
 import { db } from "@/lib/db";
 import { todayKey } from "@/lib/date-utils";
-import { isSuperAdmin } from "@/lib/roles";
 
-/** Full JSON backup of business data (password hashes excluded). Super admin only. */
+/** Full JSON backup of business data (password hashes excluded). Needs the "backup.download" permission. */
 export async function GET() {
-  const user = await getActionUser().catch(() => null);
-  if (!user || !isSuperAdmin(user.role)) return new Response("Forbidden", { status: 403 });
+  const user = await getActionUser({ perm: "backup.download" }).catch(() => null);
+  if (!user) return new Response("Forbidden", { status: 403 });
 
   const [users, departments, employees, locations, purposes, authorizationPersons, movements, auditLogs, settings] = await Promise.all([
     db.user.findMany({ select: { id: true, name: true, username: true, role: true, active: true, createdAt: true, updatedAt: true } }),

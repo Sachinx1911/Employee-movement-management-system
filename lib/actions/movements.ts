@@ -5,11 +5,10 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { Prisma } from "@/lib/generated/prisma/client";
 import { audit, diff } from "@/lib/audit";
-import { AuthError, getActionUser } from "@/lib/auth-guard";
+import { AuthError, can, getActionUser } from "@/lib/auth-guard";
 import { addDaysToKey, dateKeyToDb, formatDateKey, formatTime, isDateKey, isTimeString, todayKey, zonedDateTime } from "@/lib/date-utils";
 import { calculateDurationMinutes, formatDurationBadge } from "@/lib/duration-utils";
 import { getAppSettings } from "@/lib/queries/settings";
-import { isAdmin as isAdminRole } from "@/lib/roles";
 
 // ───────────────────────── Save the New Entry grid ─────────────────────────
 
@@ -46,8 +45,8 @@ function failure(error: unknown): { ok: false; error: string } {
 
 export async function saveDayEntries(date: string, input: unknown): Promise<SaveEntriesResult> {
   try {
-    const user = await getActionUser();
-    const isAdmin = isAdminRole(user.role);
+    const user = await getActionUser({ perm: ["entries.create", "entries.markIn", "entries.editAll"] });
+    const canEditAll = can(user, "entries.editAll");
     if (!isDateKey(date)) return { ok: false, error: "Date must be valid." };
     if (date > todayKey()) return { ok: false, error: "Entries cannot be made for a future date." };
 
@@ -78,13 +77,15 @@ export async function saveDayEntries(date: string, input: unknown): Promise<Save
     const purMap = byId(purposes);
     const authMap = byId(authorizers);
 
-    // Staff may complete/correct only today's entries that are still OUTSIDE.
-    if (!isAdmin) {
-      for (const r of rows) {
-        if (!r.id) continue;
-        const ex = exMap.get(r.id);
-        if (!ex || ex.status !== "OUTSIDE" || date !== todayKey()) err(r.key, "Only an admin can edit completed or older entries.");
+    // New rows need "create"; without "edit any entry" only today's entries that are still OUTSIDE can be changed.
+    for (const r of rows) {
+      if (!r.id) {
+        if (!can(user, "entries.create")) err(r.key, "You do not have permission to create entries.");
+        continue;
       }
+      if (canEditAll) continue;
+      const ex = exMap.get(r.id);
+      if (!ex || ex.status !== "OUTSIDE" || date !== todayKey()) err(r.key, "You do not have permission to edit completed or older entries.");
     }
 
     const now = Date.now();
@@ -244,7 +245,7 @@ export type MarkInResult = { ok: true; message: string; durationMinutes: number 
 /** Capture IN time (now, or "HH:mm" today for corrections) and compute duration. */
 export async function markIn(id: string, time?: string): Promise<MarkInResult> {
   try {
-    const user = await getActionUser();
+    const user = await getActionUser({ perm: "entries.markIn" });
     const m = await db.movement.findUnique({ where: { id }, include: { employee: { select: { name: true } } } });
     if (!m || m.status === "VOID") return { ok: false, error: "This entry no longer exists." };
     if (m.status !== "OUTSIDE" || m.inTime) return { ok: false, error: `${m.employee.name} is already marked IN.` };
@@ -289,7 +290,7 @@ class AlreadyIn extends Error {}
 
 export async function voidMovement(id: string, reason: string): Promise<{ ok: true; message: string } | { ok: false; error: string }> {
   try {
-    const user = await getActionUser({ admin: true });
+    const user = await getActionUser({ perm: "entries.delete" });
     const m = await db.movement.findUnique({ where: { id }, include: { employee: { select: { name: true } } } });
     if (!m || m.status === "VOID") return { ok: false, error: "This entry no longer exists." };
     const why = reason.trim().slice(0, 200) || null;
@@ -320,7 +321,7 @@ const nameSchema = z.string().trim().min(1).max(80);
 
 export async function quickCreateLocation(name: string): Promise<{ ok: true; id: string; name: string } | { ok: false; error: string }> {
   try {
-    const user = await getActionUser();
+    const user = await getActionUser({ perm: ["masters.quickAdd", "masters.locations"] });
     const n = nameSchema.safeParse(name);
     if (!n.success) return { ok: false, error: "Enter a location name." };
     const found = await db.location.findFirst({ where: { name: { equals: n.data } } });
@@ -342,7 +343,7 @@ export async function quickCreateLocation(name: string): Promise<{ ok: true; id:
 
 export async function quickCreatePurpose(name: string): Promise<{ ok: true; id: string; name: string } | { ok: false; error: string }> {
   try {
-    const user = await getActionUser();
+    const user = await getActionUser({ perm: ["masters.quickAdd", "masters.purposes"] });
     const n = nameSchema.safeParse(name);
     if (!n.success) return { ok: false, error: "Enter a purpose name." };
     const found = await db.purpose.findFirst({ where: { name: { equals: n.data } } });

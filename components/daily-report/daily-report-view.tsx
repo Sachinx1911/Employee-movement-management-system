@@ -130,14 +130,14 @@ export function DailyReportView({
   report,
   initialOptions,
   filterOptions,
-  isAdmin,
+  canSaveOptions,
 }: {
   date: DateKey;
   filters: DailyFilters;
   report: DailyReport;
   initialOptions: ReportOptions;
   filterOptions: { employees: Opt[]; departments: Opt[]; locations: Opt[] };
-  isAdmin: boolean;
+  canSaveOptions: boolean;
 }) {
   const router = useRouter();
   const today = todayKey();
@@ -169,7 +169,7 @@ export function DailyReportView({
   const setOption = (k: keyof ReportOptions, v: boolean) => {
     const next = { ...options, [k]: v };
     setOptions(next);
-    if (!isAdmin) return;
+    if (!canSaveOptions) return;
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(async () => {
       const r = await saveReportOptions(next);
@@ -267,7 +267,7 @@ export function DailyReportView({
 
           <section className="h-fit rounded-2xl border bg-card p-4">
             <h3 className="mb-1 text-lg font-semibold">Report Options</h3>
-            <p className="mb-3 text-sm text-muted-foreground">Choose what appears in the WhatsApp report.{isAdmin ? " Saved as default for everyone." : ""}</p>
+            <p className="mb-3 text-sm text-muted-foreground">Choose what appears in the WhatsApp report.{canSaveOptions ? " Saved as default for everyone." : ""}</p>
             <div className="divide-y rounded-xl border">
               {OPTION_ROWS.map((o) => (
                 <label key={o.key} className="flex cursor-pointer items-center justify-between gap-3 px-3 py-3">

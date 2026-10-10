@@ -1,15 +1,14 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { DailyReportView } from "@/components/daily-report/daily-report-view";
-import { requireUser } from "@/lib/auth-guard";
+import { can, requirePermission } from "@/lib/auth-guard";
 import { isDateKey, todayKey } from "@/lib/date-utils";
 import { getDailyReport, getFilterOptions, getReportOptions, parseDailyFilters } from "@/lib/queries/reports";
-import { isAdmin } from "@/lib/roles";
 
 export const metadata: Metadata = { title: "Daily Report" };
 
 export default async function DailyReportPage({ searchParams }: PageProps<"/daily-report">) {
-  const user = await requireUser();
+  const user = await requirePermission("reports.daily");
   const sp = await searchParams;
   const today = todayKey();
   const raw = typeof sp.date === "string" ? sp.date : today;
@@ -27,7 +26,7 @@ export default async function DailyReportPage({ searchParams }: PageProps<"/dail
       report={report}
       initialOptions={options}
       filterOptions={filterOptions}
-      isAdmin={isAdmin(user.role)}
+      canSaveOptions={can(user, "reports.dailyOptions")}
     />
   );
 }

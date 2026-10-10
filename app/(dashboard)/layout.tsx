@@ -25,7 +25,7 @@ export default async function DashboardLayout({ children }: LayoutProps<"/">) {
         <div className="relative px-2 pb-6 pt-1">{brand}</div>
         <div className="relative flex-1 overflow-y-auto">
           <Suspense>
-            <SidebarNav role={user.role} />
+            <SidebarNav permissions={user.permissions} />
           </Suspense>
         </div>
         {footer}
@@ -37,13 +37,13 @@ export default async function DashboardLayout({ children }: LayoutProps<"/">) {
           now={nowMs()}
           attention={attention}
           attentionEnabled={settings.notifications.entryReminders}
-          menu={<MobileDrawer role={user.role} footer={footer} brand={brand} />}
+          menu={<MobileDrawer permissions={user.permissions} footer={footer} brand={brand} />}
         />
         <main className="flex-1 px-4 pb-28 pt-5 sm:px-6 lg:pb-10 print:p-0">{children}</main>
       </div>
 
       <Suspense>
-        <MobileBottomNav />
+        <MobileBottomNav permissions={user.permissions} />
       </Suspense>
     </div>
   );

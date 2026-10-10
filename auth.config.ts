@@ -1,10 +1,10 @@
 import type { NextAuthConfig } from "next-auth";
-import { isAdmin, type Role } from "@/lib/roles";
+import type { Role } from "@/lib/roles";
 
 // Edge-safe part of the Auth.js config (no database access). Used by proxy.ts
-// for the optimistic redirect; real authorization happens on the server in
-// lib/auth-guard.ts for every page and server action.
-const ADMIN_ONLY_PREFIXES = ["/monthly-report", "/master-data", "/settings", "/audit-log"];
+// only to send signed-out visitors to /login. Which pages a user may open is
+// decided per request from the database (role permissions set by the super
+// admin) in lib/auth-guard.ts for every page, server action and API route.
 
 export const authConfig = {
   pages: { signIn: "/login" },
@@ -18,11 +18,7 @@ export const authConfig = {
       if (pathname.startsWith("/login")) {
         return isLoggedIn ? Response.redirect(new URL("/", request.nextUrl)) : true;
       }
-      if (!isLoggedIn) return false;
-      if (!isAdmin(auth.user.role) && ADMIN_ONLY_PREFIXES.some((p) => pathname.startsWith(p))) {
-        return Response.redirect(new URL("/dashboard", request.nextUrl));
-      }
-      return true;
+      return isLoggedIn;
     },
     jwt({ token, user }) {
       if (user) {

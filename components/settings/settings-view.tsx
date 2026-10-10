@@ -15,6 +15,7 @@ import {
   Save,
   Settings2,
   Shield,
+  ShieldCheck,
   Timer,
   Upload,
   Users,
@@ -35,9 +36,11 @@ import { cn } from "@/lib/utils";
 import { SectionCard, ToggleRow } from "./section-card";
 import { SecurityPanel, type AuditRow } from "./security-panel";
 import { UsersPanel, type UserRow } from "./users-panel";
-import { isSuperAdmin, type Role } from "@/lib/roles";
+import { settingsTabAllowed, type Permission, type RolePermissions } from "@/lib/permissions";
+import type { Role } from "@/lib/roles";
+import { PermissionsPanel } from "./permissions-panel";
 
-export type SettingsTab = "general" | "hours" | "notifications" | "backup" | "users" | "appearance" | "security";
+export type SettingsTab = "general" | "hours" | "notifications" | "backup" | "users" | "permissions" | "appearance" | "security";
 
 const TABS: { id: SettingsTab; label: string; icon: LucideIcon }[] = [
   { id: "general", label: "General", icon: Settings2 },
@@ -45,6 +48,7 @@ const TABS: { id: SettingsTab; label: string; icon: LucideIcon }[] = [
   { id: "notifications", label: "Notifications", icon: Bell },
   { id: "backup", label: "Data & Backup", icon: Database },
   { id: "users", label: "Users & Access", icon: Users },
+  { id: "permissions", label: "Roles & Permissions", icon: ShieldCheck },
   { id: "appearance", label: "Appearance", icon: Palette },
   { id: "security", label: "System & Security", icon: Shield },
 ];
@@ -83,6 +87,8 @@ export function SettingsView({
   users,
   meId,
   meRole,
+  permissions,
+  rolePermissions,
   audit,
 }: {
   tab: SettingsTab;
@@ -92,6 +98,10 @@ export function SettingsView({
   users: UserRow[];
   meId: string;
   meRole: Role;
+  /** What the signed-in user may do. */
+  permissions: Permission[];
+  /** Role → permissions config; only passed to the super admin. */
+  rolePermissions: RolePermissions | null;
   audit: { rows: AuditRow[]; page: number; total: number; pageSize: number };
 }) {
   const router = useRouter();
@@ -124,6 +134,9 @@ export function SettingsView({
   };
 
   const show = (...ids: SettingsTab[]) => ids.includes(tab);
+  const canSettings = permissions.includes("settings.manage");
+  const canBackup = permissions.includes("backup.download");
+  const visibleTabs = TABS.filter(({ id }) => settingsTabAllowed(id, permissions, meRole));
 
   const company = (
     <SectionCard icon={Building2} title="Company Information" subtitle="Set your company details, logo and contact information.">
@@ -261,6 +274,7 @@ export function SettingsView({
 
   const backup = (
     <SectionCard icon={Database} title="Data & Backup" subtitle="Manage data backup, export and retention settings.">
+      {canSettings && (
       <ToggleRow icon={Database} title="Automatic Backup" text="Scheduled backups run from a server job (see README)">
         <Select value={form.backup.frequency} onValueChange={(v) => set("backup", { frequency: v as AppSettings["backup"]["frequency"] })}>
           <SelectTrigger className="h-9! w-[120px]" aria-label="Backup frequency">
@@ -274,7 +288,8 @@ export function SettingsView({
           </SelectContent>
         </Select>
       </ToggleRow>
-      {isSuperAdmin(meRole) && (
+      )}
+      {canBackup && (
         <ToggleRow icon={Download} title="Download Backup" text="Full backup of all records as a JSON file">
           <Button asChild variant="outline" className="h-9 border-primary/40 text-primary hover:bg-blue-50">
             <a href="/api/backup">
@@ -283,6 +298,7 @@ export function SettingsView({
           </Button>
         </ToggleRow>
       )}
+      {canSettings && (
       <ToggleRow icon={FileText} title="Data Retention" text="Records are never deleted automatically; this is the minimum period to keep">
         <Select value={String(form.backup.retentionYears)} onValueChange={(v) => set("backup", { retentionYears: Number(v) })}>
           <SelectTrigger className="h-9! w-[150px]" aria-label="Retention years">
@@ -297,6 +313,7 @@ export function SettingsView({
           </SelectContent>
         </Select>
       </ToggleRow>
+      )}
     </SectionCard>
   );
 
@@ -333,7 +350,7 @@ export function SettingsView({
     </SectionCard>
   );
 
-  const savesForm = !show("users", "security");
+  const savesForm = canSettings && !show("users", "permissions", "security");
 
   return (
     <div className="space-y-4 pb-20">
@@ -343,7 +360,7 @@ export function SettingsView({
       </div>
 
       <div role="tablist" className="flex gap-1 overflow-x-auto rounded-xl border bg-card p-1">
-        {TABS.map(({ id, label, icon: Icon }) => (
+        {visibleTabs.map(({ id, label, icon: Icon }) => (
           <button
             key={id}
             role="tab"
@@ -384,8 +401,9 @@ export function SettingsView({
           {company}
         </div>
       )}
+      {tab === "permissions" && rolePermissions && <PermissionsPanel initial={rolePermissions} />}
       {tab === "users" && <UsersPanel users={users} meId={meId} meRole={meRole} />}
-      {tab === "security" && <SecurityPanel audit={audit.rows} page={audit.page} total={audit.total} pageSize={audit.pageSize} />}
+      {tab === "security" && <SecurityPanel audit={audit.rows} page={audit.page} total={audit.total} pageSize={audit.pageSize} showAudit={permissions.includes("audit.view")} />}
 
       {savesForm && (
         <div className="sticky bottom-[84px] z-10 flex flex-wrap items-center justify-end gap-3 rounded-2xl border bg-card/95 p-3 shadow-lg backdrop-blur lg:bottom-4">

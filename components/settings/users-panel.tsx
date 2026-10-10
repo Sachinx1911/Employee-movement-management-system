@@ -10,13 +10,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { createUser, resetUserPassword, updateUser } from "@/lib/actions/settings";
-import { isSuperAdmin, ROLE_LABEL, type Role } from "@/lib/roles";
+import { isSuperAdmin, ROLE_LABEL, rolesUpTo, type Role } from "@/lib/roles";
 import { SectionCard } from "./section-card";
 
 export type UserRow = { id: string; name: string; username: string; role: Role; active: boolean };
 
 export function UsersPanel({ users, meId, meRole }: { users: UserRow[]; meId: string; meRole: Role }) {
-  const roles: Role[] = isSuperAdmin(meRole) ? ["SUPER_ADMIN", "ADMIN", "STAFF"] : ["ADMIN", "STAFF"];
+  const roles = rolesUpTo(meRole);
   const [adding, setAdding] = useState(false);
   const [resetFor, setResetFor] = useState<UserRow | null>(null);
   const [form, setForm] = useState({ name: "", username: "", role: "STAFF" as Role, password: "" });

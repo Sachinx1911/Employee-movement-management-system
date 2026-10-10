@@ -1,15 +1,14 @@
-import { getActionUser } from "@/lib/auth-guard";
+import { can, getActionUser } from "@/lib/auth-guard";
 import { getAppSettings } from "@/lib/queries/settings";
 import { monthlyCsv, monthlyPdf, monthlyXlsx, type MonthlyTab } from "@/lib/exports";
 import { getMonthlyReport, parseMonth } from "@/lib/queries/monthly";
-import { isAdmin } from "@/lib/roles";
 
 const TABS: (MonthlyTab | "detail")[] = ["employee", "day", "department", "location", "user", "detail"];
 
 export async function GET(request: Request) {
   const user = await getActionUser().catch(() => null);
   if (!user) return new Response("Unauthorized", { status: 401 });
-  if (!isAdmin(user.role)) return new Response("Forbidden", { status: 403 });
+  if (!can(user, "reports.monthly")) return new Response("Forbidden", { status: 403 });
 
   const sp = Object.fromEntries(new URL(request.url).searchParams);
   const { year, month } = parseMonth(sp);

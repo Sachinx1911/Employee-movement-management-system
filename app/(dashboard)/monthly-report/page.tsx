@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { MonthlyReportView } from "@/components/monthly-report/monthly-report-view";
-import { requireAdmin } from "@/lib/auth-guard";
+import { requirePermission } from "@/lib/auth-guard";
 import { db } from "@/lib/db";
 import { todayKey } from "@/lib/date-utils";
 import { getMonthlyReport, parseMonth } from "@/lib/queries/monthly";
@@ -8,7 +8,7 @@ import { getMonthlyReport, parseMonth } from "@/lib/queries/monthly";
 export const metadata: Metadata = { title: "Monthly Report" };
 
 export default async function MonthlyReportPage({ searchParams }: PageProps<"/monthly-report">) {
-  const me = await requireAdmin();
+  const me = await requirePermission("reports.monthly");
   const { year, month } = parseMonth(await searchParams);
   const [ty, tm] = todayKey().split("-").map(Number);
 

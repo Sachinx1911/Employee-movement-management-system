@@ -14,11 +14,11 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { logoutAction } from "@/lib/actions/auth";
 import type { SessionUser } from "@/lib/auth-guard";
-import { titleForPath } from "@/lib/navigation";
+import { navFor, titleForPath } from "@/lib/navigation";
 import { AttentionBell, type BellItem } from "./attention-bell";
 import { GlobalSearch } from "./global-search";
 import { LiveClock } from "./live-clock";
-import { isAdmin, roleTitle } from "@/lib/roles";
+import { roleTitle } from "@/lib/roles";
 
 export function Topbar({
   user,
@@ -39,7 +39,7 @@ export function Topbar({
   return (
     <header className="no-print sticky top-0 z-30 flex h-16 items-center gap-3 border-b bg-card/95 px-4 backdrop-blur sm:px-6">
       {menu}
-      {isDashboard && isAdmin(user.role) ? (
+      {isDashboard && user.permissions.includes("search.global") ? (
         <GlobalSearch className="hidden w-full max-w-xs md:block" />
       ) : (
         <div className="flex min-w-0 items-center gap-2">
@@ -71,7 +71,7 @@ export function Topbar({
               </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            {isAdmin(user.role) && (
+            {navFor(user.permissions).some((i) => i.href === "/settings") && (
               <DropdownMenuItem asChild>
                 <Link href="/settings">
                   <Settings className="size-4" /> Settings
