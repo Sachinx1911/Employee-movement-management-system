@@ -1,6 +1,6 @@
 "use client";
 
-import { Coffee, FileDown, User, UserRound } from "lucide-react";
+import { Coffee, FileDown, Printer, User, UserRound } from "lucide-react";
 import { useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -73,11 +73,16 @@ export function EmployeeDetail({
           </Select>
         </div>
         {emp && (
-          <Button asChild variant="outline" className="h-10">
-            <a href={exportHref}>
-              <FileDown /> CSV
-            </a>
-          </Button>
+          <>
+            <Button asChild variant="outline" className="h-10">
+              <a href={exportHref}>
+                <FileDown /> CSV
+              </a>
+            </Button>
+            <Button variant="outline" className="h-10" onClick={() => window.print()}>
+              <Printer /> Print
+            </Button>
+          </>
         )}
         <div className="ml-auto flex flex-wrap items-center gap-3 text-xs">
           <span className="flex items-center gap-1.5">

@@ -1,6 +1,7 @@
 import "server-only";
 import { db } from "@/lib/db";
 import { addDaysToKey, dateKeyToDb, dbDateToKey, monthRange, todayKey, zonedDateTime } from "@/lib/date-utils";
+import { isSuperAdmin, type Role } from "@/lib/roles";
 
 export type EmployeeMonthRow = {
   employeeId: string;
@@ -23,7 +24,7 @@ export type LocationMonthRow = { location: string; visits: number; employees: nu
 export type UserMonthRow = {
   userId: string;
   name: string;
-  role: "ADMIN" | "STAFF";
+  role: Role;
   added: number;
   markedIn: number;
   edited: number;
@@ -69,7 +70,9 @@ export function parseMonth(sp: Record<string, string | string[] | undefined>) {
 const avg = (total: number, n: number) => (n ? Math.round(total / n) : 0);
 
 /** All monthly tables from one query; a month is at most a few thousand rows. */
-export async function getMonthlyReport(year: number, month: number): Promise<MonthlyReport> {
+/** `viewer`: an ADMIN never sees super admins in the "Entered By" data. */
+export async function getMonthlyReport(year: number, month: number, viewer: Role): Promise<MonthlyReport> {
+  const hideSuper = !isSuperAdmin(viewer);
   const { from, to } = monthRange(year, month);
   const rows = await db.movement.findMany({
     where: { status: { not: "VOID" }, date: { gte: dateKeyToDb(from), lte: dateKeyToDb(to) } },
@@ -83,7 +86,7 @@ export async function getMonthlyReport(year: number, month: number): Promise<Mon
       durationMinutes: true,
       employeeId: true,
       purpose: { select: { name: true } },
-      createdBy: { select: { name: true } },
+      createdBy: { select: { name: true, role: true } },
       employee: { select: { name: true, code: true, department: { select: { name: true } } } },
       location: { select: { name: true } },
     },
@@ -125,7 +128,7 @@ export async function getMonthlyReport(year: number, month: number): Promise<Mon
       emp.set(r.employeeId, e);
     }
     e.outings++;
-    e.entered.set(r.createdBy.name, (e.entered.get(r.createdBy.name) ?? 0) + 1);
+    if (!(hideSuper && r.createdBy.role === "SUPER_ADMIN")) e.entered.set(r.createdBy.name, (e.entered.get(r.createdBy.name) ?? 0) + 1);
     e.days.add(key);
     if (done) {
       e.completed++;
@@ -231,7 +234,9 @@ export async function getMonthlyReport(year: number, month: number): Promise<Mon
       durationMinutes: r.durationMinutes,
       status: r.status === "OUTSIDE" ? ("OUTSIDE" as const) : ("COMPLETED" as const),
     })),
-    users: [...userRows.values()].sort((a, b) => b.added + b.markedIn - (a.added + a.markedIn) || a.name.localeCompare(b.name)),
+    users: [...userRows.values()]
+      .filter((u) => !(hideSuper && u.role === "SUPER_ADMIN"))
+      .sort((a, b) => b.added + b.markedIn - (a.added + a.markedIn) || a.name.localeCompare(b.name)),
     summary: {
       outings: rows.length,
       employeesOut: emp.size,

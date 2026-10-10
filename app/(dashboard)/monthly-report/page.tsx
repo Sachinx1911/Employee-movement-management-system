@@ -8,12 +8,12 @@ import { getMonthlyReport, parseMonth } from "@/lib/queries/monthly";
 export const metadata: Metadata = { title: "Monthly Report" };
 
 export default async function MonthlyReportPage({ searchParams }: PageProps<"/monthly-report">) {
-  await requireAdmin();
+  const me = await requireAdmin();
   const { year, month } = parseMonth(await searchParams);
   const [ty, tm] = todayKey().split("-").map(Number);
 
   const [report, first] = await Promise.all([
-    getMonthlyReport(year, month),
+    getMonthlyReport(year, month, me.role),
     db.movement.findFirst({ orderBy: { date: "asc" }, select: { date: true } }),
   ]);
   const firstYear = Math.min(first?.date.getUTCFullYear() ?? ty, ty);

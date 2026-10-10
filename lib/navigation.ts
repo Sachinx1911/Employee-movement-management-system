@@ -12,6 +12,7 @@ import {
   UserCheck,
   type LucideIcon,
 } from "lucide-react";
+import { isAdmin, type Role } from "@/lib/roles";
 
 export type NavItem = {
   href: string;
@@ -48,8 +49,8 @@ export const MOBILE_NAV: NavItem[] = [
   { href: "/daily-report", label: "Report", icon: FileText },
 ];
 
-export function navForRole(role: "ADMIN" | "STAFF") {
-  return NAV_ITEMS.filter((item) => role === "ADMIN" || !item.adminOnly);
+export function navForRole(role: Role) {
+  return NAV_ITEMS.filter((item) => isAdmin(role) || !item.adminOnly);
 }
 
 export function titleForPath(pathname: string) {

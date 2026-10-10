@@ -6,6 +6,7 @@ import { useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { navForRole, type NavItem } from "@/lib/navigation";
 import { cn } from "@/lib/utils";
+import type { Role } from "@/lib/roles";
 
 const itemClass = (active: boolean) =>
   cn(
@@ -47,7 +48,7 @@ function Group({ item, pathname, tab, onNavigate }: { item: NavItem; pathname: s
   );
 }
 
-export function SidebarNav({ role, onNavigate }: { role: "ADMIN" | "STAFF"; onNavigate?: () => void }) {
+export function SidebarNav({ role, onNavigate }: { role: Role; onNavigate?: () => void }) {
   const pathname = usePathname();
   const tab = useSearchParams().get("tab");
   return (

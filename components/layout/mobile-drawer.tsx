@@ -5,8 +5,9 @@ import { Menu } from "lucide-react";
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { SidebarNav } from "./sidebar-nav";
+import type { Role } from "@/lib/roles";
 
-export function MobileDrawer({ role, footer, brand }: { role: "ADMIN" | "STAFF"; footer: ReactNode; brand: ReactNode }) {
+export function MobileDrawer({ role, footer, brand }: { role: Role; footer: ReactNode; brand: ReactNode }) {
   const [open, setOpen] = useState(false);
   return (
     <Sheet open={open} onOpenChange={setOpen}>

@@ -14,7 +14,7 @@ export default async function SettingsPage({ searchParams }: PageProps<"/setting
   const tab = TABS.includes(rawTab as SettingsTab) ? (rawTab as SettingsTab) : "general";
   const page = Math.max(1, Math.floor(Number(sp.page) || 1));
 
-  const [settings, logo, users, audit] = await Promise.all([getAppSettings(), getLogo(), listUsers(), listAudit(page)]);
+  const [settings, logo, users, audit] = await Promise.all([getAppSettings(), getLogo(), listUsers(me.role), listAudit(page, me.role)]);
 
   return (
     <SettingsView
@@ -25,6 +25,7 @@ export default async function SettingsPage({ searchParams }: PageProps<"/setting
       smtpConfigured={!!process.env.SMTP_HOST}
       users={users}
       meId={me.id}
+      meRole={me.role}
       audit={{ rows: audit.rows, page, total: audit.total, pageSize: AUDIT_PAGE }}
     />
   );

@@ -2,6 +2,7 @@
 
 import { db } from "@/lib/db";
 import { getActionUser } from "@/lib/auth-guard";
+import { isAdmin } from "@/lib/roles";
 
 export type SearchHit = { type: "employees" | "locations" | "purposes" | "authorizers"; id: string; title: string; subtitle: string };
 
@@ -13,7 +14,7 @@ export type SearchHit = { type: "employees" | "locations" | "purposes" | "author
  */
 export async function searchAll(raw: string): Promise<SearchHit[]> {
   const user = await getActionUser().catch(() => null);
-  if (!user || user.role !== "ADMIN") return [];
+  if (!user || !isAdmin(user.role)) return [];
   const q = raw.trim().slice(0, 60).toLowerCase();
   if (q.length < 2) return [];
   const hit = (...fields: (string | null)[]) => fields.some((f) => f?.toLowerCase().includes(q));

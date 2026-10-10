@@ -35,6 +35,7 @@ import { cn } from "@/lib/utils";
 import { SectionCard, ToggleRow } from "./section-card";
 import { SecurityPanel, type AuditRow } from "./security-panel";
 import { UsersPanel, type UserRow } from "./users-panel";
+import { isSuperAdmin, type Role } from "@/lib/roles";
 
 export type SettingsTab = "general" | "hours" | "notifications" | "backup" | "users" | "appearance" | "security";
 
@@ -81,6 +82,7 @@ export function SettingsView({
   smtpConfigured,
   users,
   meId,
+  meRole,
   audit,
 }: {
   tab: SettingsTab;
@@ -89,6 +91,7 @@ export function SettingsView({
   smtpConfigured: boolean;
   users: UserRow[];
   meId: string;
+  meRole: Role;
   audit: { rows: AuditRow[]; page: number; total: number; pageSize: number };
 }) {
   const router = useRouter();
@@ -271,13 +274,15 @@ export function SettingsView({
           </SelectContent>
         </Select>
       </ToggleRow>
-      <ToggleRow icon={Download} title="Download Backup" text="Full backup of all records as a JSON file">
-        <Button asChild variant="outline" className="h-9 border-primary/40 text-primary hover:bg-blue-50">
-          <a href="/api/backup">
-            <Download /> Download Backup
-          </a>
-        </Button>
-      </ToggleRow>
+      {isSuperAdmin(meRole) && (
+        <ToggleRow icon={Download} title="Download Backup" text="Full backup of all records as a JSON file">
+          <Button asChild variant="outline" className="h-9 border-primary/40 text-primary hover:bg-blue-50">
+            <a href="/api/backup">
+              <Download /> Download Backup
+            </a>
+          </Button>
+        </ToggleRow>
+      )}
       <ToggleRow icon={FileText} title="Data Retention" text="Records are never deleted automatically; this is the minimum period to keep">
         <Select value={String(form.backup.retentionYears)} onValueChange={(v) => set("backup", { retentionYears: Number(v) })}>
           <SelectTrigger className="h-9! w-[150px]" aria-label="Retention years">
@@ -379,7 +384,7 @@ export function SettingsView({
           {company}
         </div>
       )}
-      {tab === "users" && <UsersPanel users={users} meId={meId} />}
+      {tab === "users" && <UsersPanel users={users} meId={meId} meRole={meRole} />}
       {tab === "security" && <SecurityPanel audit={audit.rows} page={audit.page} total={audit.total} pageSize={audit.pageSize} />}
 
       {savesForm && (

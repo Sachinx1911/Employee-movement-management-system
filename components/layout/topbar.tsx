@@ -18,6 +18,7 @@ import { titleForPath } from "@/lib/navigation";
 import { AttentionBell, type BellItem } from "./attention-bell";
 import { GlobalSearch } from "./global-search";
 import { LiveClock } from "./live-clock";
+import { isAdmin, roleTitle } from "@/lib/roles";
 
 export function Topbar({
   user,
@@ -38,7 +39,7 @@ export function Topbar({
   return (
     <header className="no-print sticky top-0 z-30 flex h-16 items-center gap-3 border-b bg-card/95 px-4 backdrop-blur sm:px-6">
       {menu}
-      {isDashboard && user.role === "ADMIN" ? (
+      {isDashboard && isAdmin(user.role) ? (
         <GlobalSearch className="hidden w-full max-w-xs md:block" />
       ) : (
         <div className="flex min-w-0 items-center gap-2">
@@ -66,11 +67,11 @@ export function Topbar({
             <DropdownMenuLabel>
               <div className="text-sm font-medium">{user.name}</div>
               <div className="text-xs font-normal text-muted-foreground">
-                @{user.username} · {user.role === "ADMIN" ? "Administrator" : "Staff"}
+                @{user.username} · {roleTitle(user.role)}
               </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            {user.role === "ADMIN" && (
+            {isAdmin(user.role) && (
               <DropdownMenuItem asChild>
                 <Link href="/settings">
                   <Settings className="size-4" /> Settings

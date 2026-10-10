@@ -113,7 +113,7 @@ async function main() {
   let admin = await db.user.findUnique({ where: { username: "admin" } });
   if (!admin) {
     if (adminPassword.length < 8) throw new Error("Set SEED_ADMIN_PASSWORD (at least 8 characters) for the first deploy.");
-    admin = await db.user.create({ data: { name: "Admin", username: "admin", role: "ADMIN", passwordHash: await bcrypt.hash(adminPassword, 10) } });
+    admin = await db.user.create({ data: { name: "Admin", username: "admin", role: "SUPER_ADMIN", passwordHash: await bcrypt.hash(adminPassword, 10) } });
     console.log("Created user 'admin'.");
   }
 
@@ -143,6 +143,11 @@ async function main() {
     where: { username: "staff" },
     update: {},
     create: { name: "Office Staff", username: "staff", role: "STAFF", passwordHash: await bcrypt.hash(staffPassword, 10) },
+  });
+  await db.user.upsert({
+    where: { username: "manager" },
+    update: {},
+    create: { name: "Office Manager", username: "manager", role: "ADMIN", passwordHash: await bcrypt.hash("manager@123", 10) },
   });
 
   const deptIds = new Map<string, string>();

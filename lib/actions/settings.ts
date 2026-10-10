@@ -8,8 +8,9 @@ import type { Prisma } from "@/lib/generated/prisma/client";
 import type { ActionResult } from "@/lib/action-result";
 import { DEFAULT_APP_SETTINGS, normalizeAppSettings } from "@/lib/app-settings";
 import { audit } from "@/lib/audit";
-import { AuthError, getActionUser } from "@/lib/auth-guard";
+import { AuthError, getActionUser, type SessionUser } from "@/lib/auth-guard";
 import { normalizeReportOptions } from "@/lib/report-generator";
+import { isSuperAdmin, type Role } from "@/lib/roles";
 
 function fail(error: unknown, fallback = "Something went wrong. Please try again."): { ok: false; error: string } {
   if (error instanceof AuthError) return { ok: false, error: error.message };
@@ -126,12 +127,22 @@ const userSchema = z.object({
     .trim()
     .toLowerCase()
     .regex(/^[a-z0-9._-]{3,30}$/, "Username: 3-30 letters, numbers, . _ -"),
-  role: z.enum(["ADMIN", "STAFF"]),
+  role: z.enum(["SUPER_ADMIN", "ADMIN", "STAFF"]),
   password: passwordSchema,
 });
 
-async function hasAnotherAdmin(excludingId: string) {
-  return (await db.user.count({ where: { role: "ADMIN", active: true, id: { not: excludingId } } })) > 0;
+async function hasAnotherSuperAdmin(excludingId: string) {
+  return (await db.user.count({ where: { role: "SUPER_ADMIN", active: true, id: { not: excludingId } } })) > 0;
+}
+
+/**
+ * A user the signed-in admin may manage. Super admin accounts do not exist
+ * for an ADMIN: they get the same "not found" as a wrong id.
+ */
+async function manageableUser(me: SessionUser, id: string) {
+  const u = await db.user.findUnique({ where: { id } });
+  if (!u || (u.role === "SUPER_ADMIN" && !isSuperAdmin(me.role))) return null;
+  return u;
 }
 
 export async function createUser(input: unknown): Promise<ActionResult> {
@@ -140,6 +151,7 @@ export async function createUser(input: unknown): Promise<ActionResult> {
     const parsed = userSchema.safeParse(input);
     if (!parsed.success) return { ok: false, error: parsed.error.issues[0]!.message };
     const v = parsed.data;
+    if (v.role === "SUPER_ADMIN" && !isSuperAdmin(me.role)) return { ok: false, error: "Invalid role." };
     if (await db.user.findUnique({ where: { username: v.username } })) return { ok: false, error: "This username is already taken." };
     const u = await db.user.create({ data: { name: v.name, username: v.username, role: v.role, passwordHash: await bcrypt.hash(v.password, 12) } });
     await audit(db, { entityType: "User", entityId: u.id, action: "CREATE", userId: me.id, summary: `User ${u.username} (${u.role}) created` });
@@ -150,16 +162,20 @@ export async function createUser(input: unknown): Promise<ActionResult> {
   }
 }
 
-export async function updateUser(id: string, patch: { role?: "ADMIN" | "STAFF"; active?: boolean }): Promise<ActionResult> {
+export async function updateUser(id: string, patch: { role?: Role; active?: boolean }): Promise<ActionResult> {
   try {
     const me = await getActionUser({ admin: true });
-    const u = await db.user.findUnique({ where: { id } });
+    const parsedRole = patch.role === undefined ? undefined : z.enum(["SUPER_ADMIN", "ADMIN", "STAFF"]).safeParse(patch.role);
+    if (parsedRole && !parsedRole.success) return { ok: false, error: "Invalid role." };
+    if (patch.active !== undefined && typeof patch.active !== "boolean") return { ok: false, error: "Invalid status." };
+    const u = await manageableUser(me, id);
     if (!u) return { ok: false, error: "User not found." };
-    const demoting = patch.role === "STAFF" && u.role === "ADMIN";
+    if (patch.role === "SUPER_ADMIN" && !isSuperAdmin(me.role)) return { ok: false, error: "Invalid role." };
+    const roleChanging = patch.role !== undefined && patch.role !== u.role;
     const deactivating = patch.active === false && u.active;
-    if (id === me.id && (demoting || deactivating)) return { ok: false, error: "You cannot remove your own admin access." };
-    if ((demoting || (deactivating && u.role === "ADMIN")) && !(await hasAnotherAdmin(id))) {
-      return { ok: false, error: "At least one active admin is required." };
+    if (id === me.id && (roleChanging || deactivating)) return { ok: false, error: "You cannot change your own role or deactivate yourself." };
+    if (u.role === "SUPER_ADMIN" && (roleChanging || deactivating) && !(await hasAnotherSuperAdmin(id))) {
+      return { ok: false, error: "At least one active super admin is required." };
     }
     const changes: Record<string, { from: unknown; to: unknown }> = {};
     if (patch.role && patch.role !== u.role) changes.role = { from: u.role, to: patch.role };
@@ -182,6 +198,7 @@ export async function resetUserPassword(id: string, password: string): Promise<A
     const me = await getActionUser({ admin: true });
     const p = passwordSchema.safeParse(password);
     if (!p.success) return { ok: false, error: p.error.issues[0]!.message };
+    if (!(await manageableUser(me, id))) return { ok: false, error: "User not found." };
     const u = await db.user.update({ where: { id }, data: { passwordHash: await bcrypt.hash(p.data, 12), sessionVersion: { increment: 1 } } });
     await audit(db, { entityType: "User", entityId: id, action: "PASSWORD_RESET", userId: me.id, summary: `Password reset for ${u.username}` });
     return { ok: true, message: `Password reset for ${u.name}.` };

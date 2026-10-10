@@ -7,6 +7,7 @@ import { formatDuration, formatDurationReport } from "@/lib/duration-utils";
 import { purposeKind, PURPOSE_KIND_ARGB } from "@/lib/purpose-highlight";
 import type { MonthlyReport } from "@/lib/queries/monthly";
 import type { DailyReport } from "@/lib/queries/reports";
+import { ROLE_LABEL } from "@/lib/roles";
 
 const NAVY: [number, number, number] = [23, 54, 93];
 const BLUE_ARGB = "FF2563EB";
@@ -207,7 +208,7 @@ export function monthlyTable(r: MonthlyReport, tab: MonthlyTab): { title: string
       rows: r.users.map((u, i) => [
         i + 1,
         u.name,
-        u.role === "ADMIN" ? "Admin" : "Staff",
+        ROLE_LABEL[u.role],
         u.added,
         u.markedIn,
         u.edited,

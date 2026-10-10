@@ -10,14 +10,16 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { createUser, resetUserPassword, updateUser } from "@/lib/actions/settings";
+import { isSuperAdmin, ROLE_LABEL, type Role } from "@/lib/roles";
 import { SectionCard } from "./section-card";
 
-export type UserRow = { id: string; name: string; username: string; role: "ADMIN" | "STAFF"; active: boolean };
+export type UserRow = { id: string; name: string; username: string; role: Role; active: boolean };
 
-export function UsersPanel({ users, meId }: { users: UserRow[]; meId: string }) {
+export function UsersPanel({ users, meId, meRole }: { users: UserRow[]; meId: string; meRole: Role }) {
+  const roles: Role[] = isSuperAdmin(meRole) ? ["SUPER_ADMIN", "ADMIN", "STAFF"] : ["ADMIN", "STAFF"];
   const [adding, setAdding] = useState(false);
   const [resetFor, setResetFor] = useState<UserRow | null>(null);
-  const [form, setForm] = useState({ name: "", username: "", role: "STAFF" as "ADMIN" | "STAFF", password: "" });
+  const [form, setForm] = useState({ name: "", username: "", role: "STAFF" as Role, password: "" });
   const [newPassword, setNewPassword] = useState("");
   const [pending, start] = useTransition();
 
@@ -31,7 +33,11 @@ export function UsersPanel({ users, meId }: { users: UserRow[]; meId: string }) 
     });
 
   return (
-    <SectionCard icon={ShieldCheck} title="Users & Access" subtitle="Who can sign in. ADMIN has full access; STAFF can create OUT entries, mark IN and view daily reports.">
+    <SectionCard icon={ShieldCheck} title="Users & Access" subtitle={
+        isSuperAdmin(meRole)
+          ? "Who can sign in. SUPER ADMIN has every permission and manages admins; ADMIN has full access to data; STAFF can create OUT entries, mark IN and view daily reports."
+          : "Who can sign in. ADMIN has full access; STAFF can create OUT entries, mark IN and view daily reports."
+      }>
       <div className="mb-3 flex justify-end">
         <Button onClick={() => setAdding(true)}>
           <UserPlus /> Add User
@@ -57,12 +63,15 @@ export function UsersPanel({ users, meId }: { users: UserRow[]; meId: string }) 
                 <td className="font-mono text-xs">{u.username}</td>
                 <td>
                   <Select value={u.role} onValueChange={(v) => run(() => updateUser(u.id, { role: v as UserRow["role"] }))} disabled={pending || u.id === meId}>
-                    <SelectTrigger className="h-8! w-[110px]" aria-label={`Role of ${u.name}`}>
+                    <SelectTrigger className="h-8! w-[130px]" aria-label={`Role of ${u.name}`}>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="ADMIN">Admin</SelectItem>
-                      <SelectItem value="STAFF">Staff</SelectItem>
+                      {roles.map((r) => (
+                        <SelectItem key={r} value={r}>
+                          {ROLE_LABEL[r]}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </td>
@@ -121,8 +130,11 @@ export function UsersPanel({ users, meId }: { users: UserRow[]; meId: string }) 
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="STAFF">Staff</SelectItem>
-                  <SelectItem value="ADMIN">Admin</SelectItem>
+                  {[...roles].reverse().map((r) => (
+                    <SelectItem key={r} value={r}>
+                      {ROLE_LABEL[r]}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>

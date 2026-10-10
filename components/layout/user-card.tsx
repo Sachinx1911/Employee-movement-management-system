@@ -1,6 +1,7 @@
 import { LogOut } from "lucide-react";
 import { logoutAction } from "@/lib/actions/auth";
 import type { SessionUser } from "@/lib/auth-guard";
+import { roleTitle } from "@/lib/roles";
 
 export function initials(name: string) {
   return name
@@ -20,7 +21,7 @@ export function SidebarUserCard({ user }: { user: SessionUser }) {
         </div>
         <div className="min-w-0 flex-1 leading-tight">
           <div className="truncate text-sm font-medium text-white">{user.name}</div>
-          <div className="text-xs text-sidebar-foreground/70">{user.role === "ADMIN" ? "Administrator" : "Staff"}</div>
+          <div className="text-xs text-sidebar-foreground/70">{roleTitle(user.role)}</div>
         </div>
       </div>
       <form action={logoutAction}>

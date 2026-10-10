@@ -9,6 +9,7 @@ import { AuthError, getActionUser } from "@/lib/auth-guard";
 import { addDaysToKey, dateKeyToDb, formatDateKey, formatTime, isDateKey, isTimeString, todayKey, zonedDateTime } from "@/lib/date-utils";
 import { calculateDurationMinutes, formatDurationBadge } from "@/lib/duration-utils";
 import { getAppSettings } from "@/lib/queries/settings";
+import { isAdmin as isAdminRole } from "@/lib/roles";
 
 // ───────────────────────── Save the New Entry grid ─────────────────────────
 
@@ -46,7 +47,7 @@ function failure(error: unknown): { ok: false; error: string } {
 export async function saveDayEntries(date: string, input: unknown): Promise<SaveEntriesResult> {
   try {
     const user = await getActionUser();
-    const isAdmin = user.role === "ADMIN";
+    const isAdmin = isAdminRole(user.role);
     if (!isDateKey(date)) return { ok: false, error: "Date must be valid." };
     if (date > todayKey()) return { ok: false, error: "Entries cannot be made for a future date." };
 

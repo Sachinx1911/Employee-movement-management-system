@@ -4,6 +4,7 @@ import { EntryGrid } from "@/components/new-entry/entry-grid";
 import { requireUser } from "@/lib/auth-guard";
 import { isDateKey, todayKey } from "@/lib/date-utils";
 import { getDayEntries, getEntryOptions, getPendingIn } from "@/lib/queries/movements";
+import { isAdmin } from "@/lib/roles";
 
 export const metadata: Metadata = { title: "New Entry" };
 
@@ -25,7 +26,7 @@ export default async function NewEntryPage({ searchParams }: PageProps<"/new-ent
       entries={entries}
       options={options}
       pending={pending}
-      isAdmin={user.role === "ADMIN"}
+      isAdmin={isAdmin(user.role)}
       showPending={sp.mode === "in"}
     />
   );

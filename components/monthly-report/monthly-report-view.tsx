@@ -27,6 +27,7 @@ import type { MonthlyReport } from "@/lib/queries/monthly";
 import { cn } from "@/lib/utils";
 import { EmployeeDetail } from "./employee-detail";
 import { OutingsPerDayChart } from "./monthly-chart";
+import { ROLE_LABEL } from "@/lib/roles";
 
 type Tab = "employee" | "detail" | "day" | "department" | "location" | "user";
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
@@ -71,6 +72,10 @@ export function MonthlyReportView({ report, years, maxMonthForYear }: { report: 
   }, [report]);
 
   const detailEmp = tab === "detail" ? report.employees.find((e) => e.employeeId === empId) : undefined;
+  const kindMinutes = (kind: "lunch" | "personal") =>
+    report.entries
+      .filter((x) => x.employeeId === empId && x.inTime && purposeKind(x.purpose) === kind)
+      .reduce((a, x) => a + (x.durationMinutes ?? 0), 0);
   const needle = q.trim().toLowerCase();
   const match = (...vals: (string | null)[]) => !needle || vals.some((v) => v?.toLowerCase().includes(needle));
   const empty = s.outings === 0;
@@ -340,8 +345,8 @@ export function MonthlyReportView({ report, years, maxMonthForYear }: { report: 
                             <Td className="tabular">{i + 1}</Td>
                             <Td className="font-medium">{u.name}</Td>
                             <Td>
-                              <span className={cn("rounded-md px-2 py-0.5 text-xs font-medium", u.role === "ADMIN" ? "bg-blue-50 text-blue-700" : "bg-slate-100 text-slate-700")}>
-                                {u.role === "ADMIN" ? "Admin" : "Staff"}
+                              <span className={cn("rounded-md px-2 py-0.5 text-xs font-medium", u.role !== "STAFF" ? "bg-blue-50 text-blue-700" : "bg-slate-100 text-slate-700")}>
+                                {ROLE_LABEL[u.role]}
                               </span>
                             </Td>
                             <Td className="tabular text-right font-medium">{u.added}</Td>
@@ -403,7 +408,9 @@ export function MonthlyReportView({ report, years, maxMonthForYear }: { report: 
               Employee Detail — {detailEmp.name}
               {detailEmp.code ? ` (${detailEmp.code})` : ""} · Outings: {detailEmp.outings} · Total Out Time: {formatDuration(detailEmp.totalMinutes)}
             </p>
-            <p className="mb-2 text-xs">Highlight: Lunch = light orange, Personal Work = light violet</p>
+            <p className="mb-2 text-xs">
+              Lunch: {formatDuration(kindMinutes("lunch"))} (light orange) · Personal Work: {formatDuration(kindMinutes("personal"))} (light violet)
+            </p>
             <table className="w-full border-collapse text-xs [print-color-adjust:exact] [&_td]:border [&_td]:px-2 [&_td]:py-1 [&_th]:border [&_th]:px-2 [&_th]:py-1 [&_th]:text-left">
               <thead>
                 <tr>
@@ -509,7 +516,7 @@ export function MonthlyReportView({ report, years, maxMonthForYear }: { report: 
             {report.users.map((u) => (
               <tr key={u.userId}>
                 <td>{u.name}</td>
-                <td>{u.role === "ADMIN" ? "Admin" : "Staff"}</td>
+                <td>{ROLE_LABEL[u.role]}</td>
                 <td>{u.added}</td>
                 <td>{u.markedIn}</td>
                 <td>{u.edited}</td>

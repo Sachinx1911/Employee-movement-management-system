@@ -3,8 +3,9 @@ import { redirect } from "next/navigation";
 import { cache } from "react";
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
+import { isAdmin, type Role } from "@/lib/roles";
 
-export type SessionUser = { id: string; name: string; username: string; role: "ADMIN" | "STAFF" };
+export type SessionUser = { id: string; name: string; username: string; role: Role };
 
 /**
  * The signed-in user, re-checked against the database on every request:
@@ -34,7 +35,7 @@ export async function requireUser(): Promise<SessionUser> {
 /** For admin-only pages: redirects staff back to the dashboard. */
 export async function requireAdmin(): Promise<SessionUser> {
   const user = await requireUser();
-  if (user.role !== "ADMIN") redirect("/dashboard");
+  if (!isAdmin(user.role)) redirect("/dashboard");
   return user;
 }
 
@@ -44,6 +45,6 @@ export class AuthError extends Error {}
 export async function getActionUser(opts: { admin?: boolean } = {}): Promise<SessionUser> {
   const user = await currentUser();
   if (!user) throw new AuthError("Your session has ended. Please log in again.");
-  if (opts.admin && user.role !== "ADMIN") throw new AuthError("Only an admin can perform this action.");
+  if (opts.admin && !isAdmin(user.role)) throw new AuthError("Only an admin can perform this action.");
   return user;
 }

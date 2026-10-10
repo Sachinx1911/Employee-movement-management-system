@@ -4,6 +4,7 @@ import { DailyReportView } from "@/components/daily-report/daily-report-view";
 import { requireUser } from "@/lib/auth-guard";
 import { isDateKey, todayKey } from "@/lib/date-utils";
 import { getDailyReport, getFilterOptions, getReportOptions, parseDailyFilters } from "@/lib/queries/reports";
+import { isAdmin } from "@/lib/roles";
 
 export const metadata: Metadata = { title: "Daily Report" };
 
@@ -26,7 +27,7 @@ export default async function DailyReportPage({ searchParams }: PageProps<"/dail
       report={report}
       initialOptions={options}
       filterOptions={filterOptions}
-      isAdmin={user.role === "ADMIN"}
+      isAdmin={isAdmin(user.role)}
     />
   );
 }
