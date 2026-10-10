@@ -92,6 +92,31 @@ export function merge(current: GridRow[], entries: EntryRow[]): GridRow[] {
   return pad([...kept.slice(0, at), ...added, ...kept.slice(at)]);
 }
 
+/**
+ * Keep saved rows in OUT-time order. Only "settled" rows (saved, unchanged and
+ * not the row being typed in) move, and only among their own slots, so a row
+ * the user is editing and the blank rows never jump around.
+ */
+export function sortByOutTime(rows: GridRow[], editingKey?: string | null): GridRow[] {
+  const settled = (r: GridRow) => !!r.id && !isDirty(r) && r.key !== editingKey;
+  const slots: number[] = [];
+  const sorted: GridRow[] = [];
+  rows.forEach((r, i) => {
+    if (!settled(r)) return;
+    slots.push(i);
+    sorted.push(r);
+  });
+  sorted.sort((a, b) => a.outTime.localeCompare(b.outTime)); // "HH:mm", stable for equal times
+  if (sorted.every((r, i) => r === rows[slots[i]!])) return rows;
+  const out = [...rows];
+  slots.forEach((slot, i) => (out[slot] = sorted[i]!));
+  return out;
+}
+
+/** Key of the grid row that has keyboard focus (browser only). */
+export const focusedRowKey = () =>
+  typeof document === "undefined" ? null : ((document.activeElement as HTMLElement | null)?.closest("[data-row-key]")?.getAttribute("data-row-key") ?? null);
+
 const toMin = (t: string) => {
   const [h, m] = t.split(":").map(Number);
   return h * 60 + m;

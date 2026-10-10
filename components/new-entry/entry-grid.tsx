@@ -29,7 +29,7 @@ import { formatDuration, formatDurationBadge } from "@/lib/duration-utils";
 import { entrySuccess } from "@/lib/notify";
 import type { EntryOptions, EntryRow, PendingIn } from "@/lib/queries/movements";
 import { cn } from "@/lib/utils";
-import { blankRow, build, isBlank, isDirty, liveDuration, merge, newKey, pad, rowState, snapshot, type GridRow } from "./grid-model";
+import { blankRow, build, focusedRowKey, isBlank, isDirty, liveDuration, merge, newKey, pad, rowState, snapshot, sortByOutTime, type GridRow } from "./grid-model";
 import { PendingInStrip } from "./pending-in-strip";
 import { TimeText } from "./time-text";
 import { Typeahead, type TypeOption } from "./typeahead";
@@ -106,7 +106,7 @@ export function EntryGrid({
   const [prevEntries, setPrevEntries] = useState(entries);
   if (entries !== prevEntries) {
     setPrevEntries(entries);
-    setRows((r) => merge(r, entries));
+    setRows((r) => sortByOutTime(merge(r, entries), focusedRowKey()));
   }
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [savingKeys, setSavingKeys] = useState<ReadonlySet<string>>(new Set());
@@ -144,7 +144,7 @@ export function EntryGrid({
   // ── Auto-save ────────────────────────────────────────────────────────────
   /** Save ready rows. A row is saved when focus has left it (`leftKey`) or it has been idle for a few seconds. */
   const flush = useCallback(async (leftKey?: string) => {
-    const focusedKey = (document.activeElement as HTMLElement | null)?.closest("[data-row-key]")?.getAttribute("data-row-key");
+    const focusedKey = focusedRowKey();
     const now = Date.now();
     const batch = rowsRef.current.filter(
       (r) =>
@@ -189,14 +189,17 @@ export function EntryGrid({
     const newIds = new Set(Object.values(res.ids));
     setRows((rs) =>
       pad(
-        rs
-          // Drop copies a server refresh may already have merged in.
-          .filter((r) => !(r.id && newIds.has(r.id) && !sent.has(r.key)))
-          .map((r) => {
-            const s = sent.get(r.key);
-            if (!s) return r;
-            return { ...r, id: r.id ?? res.ids[r.key], original: snapshot(s), savedStatus: s.inTime ? "COMPLETED" : "OUTSIDE" };
-          }),
+        sortByOutTime(
+          rs
+            // Drop copies a server refresh may already have merged in.
+            .filter((r) => !(r.id && newIds.has(r.id) && !sent.has(r.key)))
+            .map((r) => {
+              const s = sent.get(r.key);
+              if (!s) return r;
+              return { ...r, id: r.id ?? res.ids[r.key], original: snapshot(s), savedStatus: s.inTime ? "COMPLETED" : "OUTSIDE" };
+            }),
+          focusedRowKey(),
+        ),
       ),
     );
     setSavedKeys((prev) => new Set([...prev, ...keys]));
