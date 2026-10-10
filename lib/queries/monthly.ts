@@ -31,6 +31,19 @@ export type UserMonthRow = {
   lastActivity: string | null; // ISO
 };
 
+/** One movement, for the per-employee detail view. Times are ISO strings. */
+export type MonthEntry = {
+  id: string;
+  employeeId: string;
+  date: string;
+  outTime: string;
+  inTime: string | null;
+  location: string;
+  purpose: string | null;
+  durationMinutes: number | null;
+  status: "OUTSIDE" | "COMPLETED";
+};
+
 export type MonthlyReport = {
   year: number;
   month: number;
@@ -40,6 +53,7 @@ export type MonthlyReport = {
   departments: DeptMonthRow[];
   locations: LocationMonthRow[];
   users: UserMonthRow[];
+  entries: MonthEntry[];
 };
 
 export function parseMonth(sp: Record<string, string | string[] | undefined>) {
@@ -59,11 +73,16 @@ export async function getMonthlyReport(year: number, month: number): Promise<Mon
   const { from, to } = monthRange(year, month);
   const rows = await db.movement.findMany({
     where: { status: { not: "VOID" }, date: { gte: dateKeyToDb(from), lte: dateKeyToDb(to) } },
+    orderBy: { outTime: "asc" },
     select: {
+      id: true,
       date: true,
+      outTime: true,
+      inTime: true,
       status: true,
       durationMinutes: true,
       employeeId: true,
+      purpose: { select: { name: true } },
       createdBy: { select: { name: true } },
       employee: { select: { name: true, code: true, department: { select: { name: true } } } },
       location: { select: { name: true } },
@@ -201,6 +220,17 @@ export async function getMonthlyReport(year: number, month: number): Promise<Mon
   return {
     year,
     month,
+    entries: rows.map((r) => ({
+      id: r.id,
+      employeeId: r.employeeId,
+      date: dbDateToKey(r.date),
+      outTime: r.outTime.toISOString(),
+      inTime: r.inTime?.toISOString() ?? null,
+      location: r.location.name,
+      purpose: r.purpose?.name ?? null,
+      durationMinutes: r.durationMinutes,
+      status: r.status === "OUTSIDE" ? ("OUTSIDE" as const) : ("COMPLETED" as const),
+    })),
     users: [...userRows.values()].sort((a, b) => b.added + b.markedIn - (a.added + a.markedIn) || a.name.localeCompare(b.name)),
     summary: {
       outings: rows.length,

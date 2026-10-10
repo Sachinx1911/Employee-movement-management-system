@@ -40,6 +40,7 @@ const PURPOSES: [string, string][] = [
   ["Government Office", "Work at a government / municipal office"],
   ["Advocate Office", "Visit to advocate / legal office"],
   ["Lunch", "Lunch break outside office"],
+  ["Personal Work", "Personal work outside office"],
   ["Other", "Any other purpose"],
 ];
 

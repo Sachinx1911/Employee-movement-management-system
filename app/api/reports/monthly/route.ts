@@ -3,7 +3,7 @@ import { getAppSettings } from "@/lib/queries/settings";
 import { monthlyCsv, monthlyPdf, monthlyXlsx, type MonthlyTab } from "@/lib/exports";
 import { getMonthlyReport, parseMonth } from "@/lib/queries/monthly";
 
-const TABS: MonthlyTab[] = ["employee", "day", "department", "location", "user"];
+const TABS: (MonthlyTab | "detail")[] = ["employee", "day", "department", "location", "user", "detail"];
 
 export async function GET(request: Request) {
   const session = await auth();
@@ -12,7 +12,7 @@ export async function GET(request: Request) {
 
   const sp = Object.fromEntries(new URL(request.url).searchParams);
   const { year, month } = parseMonth(sp);
-  const tab = TABS.includes(sp.tab as MonthlyTab) ? (sp.tab as MonthlyTab) : "employee";
+  const tab = TABS.includes(sp.tab as MonthlyTab) ? (sp.tab as MonthlyTab | "detail") : "employee";
   const report = await getMonthlyReport(year, month);
   const name = `DDSR-Monthly-Report-${year}-${String(month).padStart(2, "0")}`;
 
@@ -31,8 +31,11 @@ export async function GET(request: Request) {
     });
   }
   if (sp.format === "csv") {
-    return new Response(monthlyCsv(report, tab), {
-      headers: { "Content-Type": "text/csv; charset=utf-8", "Content-Disposition": `attachment; filename="${name}-${tab}.csv"`, "Cache-Control": "no-store" },
+    const employee = tab === "detail" ? report.employees.find((e) => e.employeeId === sp.employee) : undefined;
+    if (tab === "detail" && !employee) return new Response("Select an employee", { status: 400 });
+    const suffix = employee ? `${(employee.code ?? "employee").replace(/[^\w-]/g, "")}-detail` : tab;
+    return new Response(monthlyCsv(report, tab, employee?.employeeId), {
+      headers: { "Content-Type": "text/csv; charset=utf-8", "Content-Disposition": `attachment; filename="${name}-${suffix}.csv"`, "Cache-Control": "no-store" },
     });
   }
   return new Response("Unknown format", { status: 400 });

@@ -4,6 +4,7 @@ import { jsPDF } from "jspdf";
 import { autoTable } from "jspdf-autotable";
 import { formatDateKey, formatDateTime, formatTimeReport } from "@/lib/date-utils";
 import { formatDuration, formatDurationReport } from "@/lib/duration-utils";
+import { purposeKind, PURPOSE_KIND_ARGB } from "@/lib/purpose-highlight";
 import type { MonthlyReport } from "@/lib/queries/monthly";
 import type { DailyReport } from "@/lib/queries/reports";
 
@@ -251,8 +252,29 @@ export function monthlyTable(r: MonthlyReport, tab: MonthlyTab): { title: string
 
 const ALL_TABS: MonthlyTab[] = ["employee", "day", "department", "location", "user"];
 
-export function monthlyCsv(r: MonthlyReport, tab: MonthlyTab): string {
-  const t = monthlyTable(r, tab);
+/** Every entry of the month (optionally one employee), oldest first. */
+export function monthlyEntriesTable(r: MonthlyReport, employeeId?: string) {
+  const names = new Map(r.employees.map((e) => [e.employeeId, e.name]));
+  const list = employeeId ? r.entries.filter((e) => e.employeeId === employeeId) : r.entries;
+  return {
+    title: employeeId ? `Employee Detail — ${names.get(employeeId) ?? ""}` : "All Entries",
+    head: ["Sr.", "Employee", "Date", "OUT Time", "IN Time", "Location", "Reason (Purpose)", "Total Out Time"],
+    kinds: list.map((e) => purposeKind(e.purpose)),
+    rows: list.map((e, i) => [
+      i + 1,
+      names.get(e.employeeId) ?? "",
+      formatDateKey(e.date),
+      formatTimeReport(new Date(e.outTime)),
+      e.inTime ? formatTimeReport(new Date(e.inTime)) : "Pending",
+      e.location,
+      e.purpose ?? "",
+      e.inTime ? formatDurationReport(e.durationMinutes) : "-",
+    ]),
+  };
+}
+
+export function monthlyCsv(r: MonthlyReport, tab: MonthlyTab | "detail", employeeId?: string): string {
+  const t = tab === "detail" ? monthlyEntriesTable(r, employeeId) : monthlyTable(r, tab);
   const esc = (v: string | number) => (/[",\n]/.test(String(v)) ? `"${String(v).replace(/"/g, '""')}"` : String(v));
   return "\uFEFF" + [t.head, ...t.rows].map((row) => row.map(esc).join(",")).join("\r\n");
 }
@@ -274,6 +296,25 @@ export async function monthlyXlsx(r: MonthlyReport): Promise<Buffer> {
     t.head.forEach((head, i) => (ws.getColumn(i + 1).width = Math.max(12, head.length + 4)));
     ws.getColumn(tab === "employee" ? 2 : 1).width = 24;
   }
+
+  // All entries, Lunch / Personal Work rows filled with the same light colours as the screen.
+  const t = monthlyEntriesTable(r);
+  const ws = wb.addWorksheet(t.title, { views: [{ state: "frozen", ySplit: 3 }] });
+  ws.mergeCells(1, 1, 1, t.head.length);
+  ws.getCell("A1").value = `DDSR GROUP — Monthly Report (${t.title}) — ${monthLabel(r)}   ·   Highlight: Lunch = orange, Personal Work = violet`;
+  ws.getCell("A1").font = { bold: true, size: 13, color: { argb: "FF17365D" } };
+  const h = ws.getRow(3);
+  h.values = t.head;
+  h.font = { bold: true, color: { argb: "FFFFFFFF" } };
+  h.eachCell((c) => (c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: BLUE_ARGB } }));
+  t.rows.forEach((row, i) => {
+    const added = ws.addRow(row);
+    const kind = t.kinds[i];
+    if (kind) {
+      for (let c = 1; c <= t.head.length; c++) added.getCell(c).fill = { type: "pattern", pattern: "solid", fgColor: { argb: PURPOSE_KIND_ARGB[kind] } };
+    }
+  });
+  [6, 22, 14, 11, 11, 26, 22, 15].forEach((w, i) => (ws.getColumn(i + 1).width = w));
   return Buffer.from(await wb.xlsx.writeBuffer());
 }
 

@@ -20,16 +20,19 @@ import { StatCard } from "@/components/shared/stat-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { formatDateKey, formatDateTime } from "@/lib/date-utils";
-import { formatDuration } from "@/lib/duration-utils";
+import { formatDateKey, formatDateTime, formatTime } from "@/lib/date-utils";
+import { formatDuration, formatDurationReport } from "@/lib/duration-utils";
+import { purposeKind } from "@/lib/purpose-highlight";
 import type { MonthlyReport } from "@/lib/queries/monthly";
 import { cn } from "@/lib/utils";
+import { EmployeeDetail } from "./employee-detail";
 import { OutingsPerDayChart } from "./monthly-chart";
 
-type Tab = "employee" | "day" | "department" | "location" | "user";
+type Tab = "employee" | "detail" | "day" | "department" | "location" | "user";
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 const TABS: { id: Tab; label: string }[] = [
   { id: "employee", label: "Employee Wise" },
+  { id: "detail", label: "Employee Detail" },
   { id: "day", label: "Day Wise" },
   { id: "department", label: "Department Wise" },
   { id: "location", label: "Location Wise" },
@@ -50,6 +53,7 @@ export function MonthlyReportView({ report, years, maxMonthForYear }: { report: 
   const [month, setMonth] = useState(report.month);
   const [tab, setTab] = useState<Tab>("employee");
   const [q, setQ] = useState("");
+  const [empId, setEmpId] = useState("");
   const s = report.summary;
   const label = `${MONTHS[report.month - 1]} ${report.year}`;
   const qs = `year=${report.year}&month=${report.month}`;
@@ -66,6 +70,7 @@ export function MonthlyReportView({ report, years, maxMonthForYear }: { report: 
     });
   }, [report]);
 
+  const detailEmp = tab === "detail" ? report.employees.find((e) => e.employeeId === empId) : undefined;
   const needle = q.trim().toLowerCase();
   const match = (...vals: (string | null)[]) => !needle || vals.some((v) => v?.toLowerCase().includes(needle));
   const empty = s.outings === 0;
@@ -133,7 +138,7 @@ export function MonthlyReportView({ report, years, maxMonthForYear }: { report: 
               </a>
             </Button>
             <Button asChild variant="outline" className="h-10">
-              <a href={`/api/reports/monthly?${qs}&format=csv&tab=${tab}`}>
+              <a href={`/api/reports/monthly?${qs}&format=csv&tab=${tab === "detail" && !empId ? "employee" : tab}${tab === "detail" && empId ? `&employee=${empId}` : ""}`}>
                 <FileDown /> CSV
               </a>
             </Button>
@@ -184,7 +189,15 @@ export function MonthlyReportView({ report, years, maxMonthForYear }: { report: 
           </div>
 
           <div className="mt-3 overflow-x-auto">
-            {empty ? (
+            {tab === "detail" ? (
+              <EmployeeDetail
+                employees={report.employees}
+                entries={report.entries}
+                employeeId={empId}
+                onEmployeeChange={setEmpId}
+                exportHref={`/api/reports/monthly?${qs}&format=csv&tab=detail&employee=${empId}`}
+              />
+            ) : empty ? (
               <p className="py-12 text-center text-sm text-muted-foreground">No movement data available for this month.</p>
             ) : (
               <table className="w-full min-w-[860px] text-sm">
@@ -209,7 +222,19 @@ export function MonthlyReportView({ report, years, maxMonthForYear }: { report: 
                         .map((e, i) => (
                           <tr key={e.employeeId} className="border-b">
                             <Td className="tabular">{i + 1}</Td>
-                            <Td className="font-medium">{e.name}</Td>
+                            <Td className="font-medium">
+                              <button
+                                type="button"
+                                title="Show every entry"
+                                className="hover:text-primary hover:underline"
+                                onClick={() => {
+                                  setEmpId(e.employeeId);
+                                  setTab("detail");
+                                }}
+                              >
+                                {e.name}
+                              </button>
+                            </Td>
                             <Td>{e.department ?? "—"}</Td>
                             <Td className="tabular text-right">{e.workingDays}</Td>
                             <Td className="tabular text-right">{e.outings}</Td>
@@ -372,6 +397,47 @@ export function MonthlyReportView({ report, years, maxMonthForYear }: { report: 
           </div>
           <div className="text-lg font-semibold">{label}</div>
         </div>
+        {detailEmp ? (
+          <>
+            <p className="mb-2 text-sm font-semibold">
+              Employee Detail — {detailEmp.name}
+              {detailEmp.code ? ` (${detailEmp.code})` : ""} · Outings: {detailEmp.outings} · Total Out Time: {formatDuration(detailEmp.totalMinutes)}
+            </p>
+            <p className="mb-2 text-xs">Highlight: Lunch = light orange, Personal Work = light violet</p>
+            <table className="w-full border-collapse text-xs [print-color-adjust:exact] [&_td]:border [&_td]:px-2 [&_td]:py-1 [&_th]:border [&_th]:px-2 [&_th]:py-1 [&_th]:text-left">
+              <thead>
+                <tr>
+                  <th>Sr.</th>
+                  <th>Date</th>
+                  <th>OUT</th>
+                  <th>IN</th>
+                  <th>Location</th>
+                  <th>Reason</th>
+                  <th>Total Out Time</th>
+                </tr>
+              </thead>
+              <tbody>
+                {report.entries
+                  .filter((x) => x.employeeId === detailEmp.employeeId)
+                  .map((x, i) => {
+                    const k = purposeKind(x.purpose);
+                    return (
+                      <tr key={x.id} className={cn(k === "lunch" && "bg-orange-50", k === "personal" && "bg-violet-50")}>
+                        <td>{i + 1}</td>
+                        <td>{formatDateKey(x.date)}</td>
+                        <td>{formatTime(new Date(x.outTime))}</td>
+                        <td>{x.inTime ? formatTime(new Date(x.inTime)) : "Pending"}</td>
+                        <td>{x.location}</td>
+                        <td>{x.purpose ?? "-"}</td>
+                        <td>{x.inTime ? formatDurationReport(x.durationMinutes) : "-"}</td>
+                      </tr>
+                    );
+                  })}
+              </tbody>
+            </table>
+          </>
+        ) : (
+          <>
         <p className="mb-4 text-sm">
           Total Outings: {s.outings} · Employees Out: {s.employeesOut} · Total Outside Time: {formatDuration(s.totalMinutes)} · Average / Outing: {formatDuration(s.avgMinutes)} · Pending IN: {s.pending}
         </p>
@@ -452,6 +518,8 @@ export function MonthlyReportView({ report, years, maxMonthForYear }: { report: 
             ))}
           </tbody>
         </table>
+          </>
+        )}
       </div>
     </>
   );
