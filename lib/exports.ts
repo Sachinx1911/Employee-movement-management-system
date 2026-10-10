@@ -279,9 +279,143 @@ export function monthlyCsv(r: MonthlyReport, tab: MonthlyTab | "detail", employe
   return "\uFEFF" + [t.head, ...t.rows].map((row) => row.map(esc).join(",")).join("\r\n");
 }
 
+const hm = (m: number) => `${Math.floor(m / 60)}H ${m % 60}M`;
+
+/**
+ * "Employee Detail" sheet: a dropdown in B2 picks the employee and formulas pull
+ * that employee's entries from the hidden "Data" sheet. Plain INDEX/MATCH so it
+ * works in every Excel version (no FILTER). Lunch / Personal Work rows get
+ * conditional light fills. Cached results are written for the first employee.
+ */
+function addEmployeeDetailSheet(wb: ExcelJS.Workbook, r: MonthlyReport) {
+  const ws = wb.addWorksheet("Employee Detail", { views: [{ state: "frozen", ySplit: 6 }] });
+  const data = wb.addWorksheet("Data", { state: "hidden" });
+
+  const label = new Map(r.employees.map((e) => [e.employeeId, e.code ? `${e.name} (${e.code})` : e.name]));
+  const labels = r.employees.map((e) => label.get(e.employeeId)!);
+  const selected = labels[0] ?? "";
+  const n = Math.max(r.entries.length + 1, 2); // last data row
+  const SEL = "'Employee Detail'!$B$2";
+  const col = (c: string) => `Data!$${c}$2:$${c}$${n}`;
+
+  // Data: A key (nth match of the selected employee), B employee, C date, D OUT, E IN,
+  // F location, G reason, H duration text, I minutes; K = dropdown list.
+  data.getRow(1).values = ["Key", "Employee", "Date", "OUT Time", "IN Time", "Location", "Reason", "Total Out Time", "Minutes", "", "Employees"];
+  let seen = 0;
+  const mine: string[][] = [];
+  r.entries.forEach((e, i) => {
+    const row = i + 2;
+    const emp = label.get(e.employeeId) ?? "";
+    const isSel = emp === selected;
+    if (isSel) seen++;
+    const values = [
+      formatDateKey(e.date),
+      formatTimeReport(new Date(e.outTime)),
+      e.inTime ? formatTimeReport(new Date(e.inTime)) : "Pending",
+      e.location,
+      e.purpose ?? "",
+      e.inTime ? formatDurationReport(e.durationMinutes) : "-",
+    ];
+    if (isSel) mine.push(values);
+    data.getRow(row).values = [
+      { formula: `IF(B${row}=${SEL},COUNTIF(B$2:B${row},${SEL}),"")`, result: isSel ? seen : "" },
+      emp,
+      ...values,
+      e.inTime ? (e.durationMinutes ?? 0) : 0,
+    ];
+  });
+  labels.forEach((l, i) => (data.getCell(i + 2, 11).value = l));
+
+  const mins = (who: string, word = "") =>
+    r.entries
+      .filter((e) => label.get(e.employeeId) === who && e.inTime && (e.purpose ?? "").toLowerCase().includes(word))
+      .reduce((a, e) => a + (e.durationMinutes ?? 0), 0);
+
+  const thin = { style: "thin" as const, color: { argb: "FFCBD5E1" } };
+  const box = { top: thin, left: thin, bottom: thin, right: thin };
+  const fill = (argb: string) => ({ type: "pattern" as const, pattern: "solid" as const, fgColor: { argb } });
+
+  ws.mergeCells("A1:G1");
+  ws.getCell("A1").value = `DDSR GROUP — Employee Detail — ${monthLabel(r)}`;
+  ws.getCell("A1").font = { bold: true, size: 14, color: { argb: "FF17365D" } };
+
+  ws.getCell("A2").value = "Select Employee ▼";
+  ws.getCell("A2").font = { bold: true };
+  ws.mergeCells("B2:D2");
+  const pick = ws.getCell("B2");
+  pick.value = selected;
+  pick.font = { bold: true, size: 12 };
+  pick.fill = fill("FFFEF9C3");
+  pick.border = { top: { style: "medium" }, left: { style: "medium" }, bottom: { style: "medium" }, right: { style: "medium" } };
+  pick.dataValidation = {
+    type: "list",
+    allowBlank: true,
+    formulae: [`Data!$K$2:$K$${Math.max(labels.length + 1, 2)}`],
+    showErrorMessage: true,
+    errorTitle: "Employee",
+    error: "Please pick an employee from the list.",
+  };
+  ws.getCell("F2").value = "Lunch";
+  ws.getCell("F2").fill = fill(PURPOSE_KIND_ARGB.lunch);
+  ws.getCell("G2").value = "Personal Work";
+  ws.getCell("G2").fill = fill(PURPOSE_KIND_ARGB.personal);
+  ws.getCell("A3").value = "Click the yellow cell and choose an employee — the entries below update automatically.";
+  ws.getCell("A3").font = { italic: true, size: 9, color: { argb: "FF64748B" } };
+
+  const sumMin = (word = "") => `SUMIFS(${col("I")},${col("B")},$B$2${word ? `,${col("G")},"*${word}*"` : ""})`;
+  const hmFormula = (word = "") => `INT(${sumMin(word)}/60)&"H "&MOD(${sumMin(word)},60)&"M"`;
+  const summary: [string, string, string | number, string?][] = [
+    ["Total Outings", `COUNTIF(${col("B")},$B$2)`, mine.length],
+    ["Total Out Time", hmFormula(), hm(mins(selected))],
+    ["Lunch", hmFormula("lunch"), hm(mins(selected, "lunch")), PURPOSE_KIND_ARGB.lunch],
+    ["Personal Work", hmFormula("personal"), hm(mins(selected, "personal")), PURPOSE_KIND_ARGB.personal],
+  ];
+  summary.forEach(([name, formula, result, argb], i) => {
+    const l = ws.getCell(4, 1 + i * 2);
+    l.value = name;
+    l.font = { bold: true, size: 9, color: { argb: "FF475569" } };
+    const v = ws.getCell(4, 2 + i * 2);
+    v.value = { formula, result };
+    v.font = { bold: true, size: 12 };
+    if (argb) [l, v].forEach((x) => (x.fill = fill(argb)));
+  });
+
+  const head = ws.getRow(6);
+  head.values = ["Sr.", "Date", "OUT Time", "IN Time", "Location", "Reason (Purpose)", "Total Out Time"];
+  head.font = { bold: true, color: { argb: "FFFFFFFF" } };
+  head.eachCell((c) => {
+    c.fill = fill(BLUE_ARGB);
+    c.border = box;
+  });
+
+  // One formula row per possible entry (enough for the busiest employee).
+  const maxRows = Math.max(1, ...r.employees.map((e) => r.entries.filter((x) => x.employeeId === e.employeeId).length));
+  const src = ["C", "D", "E", "F", "G", "H"];
+  for (let k = 1; k <= maxRows; k++) {
+    const row = ws.getRow(6 + k);
+    const has = k <= mine.length;
+    row.getCell(1).value = { formula: `IF(B${6 + k}="","",${k})`, result: has ? k : "" };
+    src.forEach((c, j) => {
+      row.getCell(j + 2).value = { formula: `IFERROR(INDEX(${col(c)},MATCH(${k},${col("A")},0)),"")`, result: has ? mine[k - 1][j] : "" };
+    });
+    for (let c = 1; c <= 7; c++) row.getCell(c).border = box;
+  }
+  const rule = (word: string, argb: string) => ({
+    type: "expression" as const,
+    priority: 1,
+    formulae: [`ISNUMBER(SEARCH("${word}",$F7))`],
+    style: { fill: { type: "pattern" as const, pattern: "solid" as const, bgColor: { argb } } },
+  });
+  ws.addConditionalFormatting({ ref: `A7:G${6 + maxRows}`, rules: [rule("lunch", PURPOSE_KIND_ARGB.lunch), rule("personal", PURPOSE_KIND_ARGB.personal)] });
+
+  [18, 14, 13, 13, 26, 24, 16, 14].forEach((w, i) => (ws.getColumn(i + 1).width = w));
+}
+
 export async function monthlyXlsx(r: MonthlyReport): Promise<Buffer> {
   const wb = new ExcelJS.Workbook();
   wb.creator = "DDSR GROUP";
+  wb.calcProperties.fullCalcOnLoad = true;
+  addEmployeeDetailSheet(wb, r); // first sheet, opens by default
   for (const tab of ALL_TABS) {
     const t = monthlyTable(r, tab);
     const ws = wb.addWorksheet(t.title, { views: [{ state: "frozen", ySplit: 3 }] });
